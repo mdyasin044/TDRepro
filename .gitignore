@@ -5,3 +5,5 @@ tdrepro/status.txt
 Results/merged_failures.csv
 __pycache__/
 tdrepro/metadata/
+*:Zone.Identifier
+*Zone.Identifier
