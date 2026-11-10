@@ -1,0 +1,7 @@
+tdrepro/projects/
+tdrepro/logs*/
+tdrepro/run_all.log
+tdrepro/status.txt
+Results/merged_failures.csv
+__pycache__/
+tdrepro/metadata/
