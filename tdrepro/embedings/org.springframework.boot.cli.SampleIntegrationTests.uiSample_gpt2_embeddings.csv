@@ -1,0 +1,1673 @@
+Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,timing_score
+org.springframework.boot.cli.compiler.GroovyCompiler,<init>,(Lorg/springframework/boot/cli/compiler/GroovyCompilerConfiguration;)V,21,24,87.5%,"public GroovyCompiler(final GroovyCompilerConfiguration configuration) {
+
+		this.configuration = configuration;
+		this.loader = createLoader(configuration);
+
+		DependencyResolutionContext resolutionContext = new DependencyResolutionContext();
+
+		AetherGrapeEngine grapeEngine = AetherGrapeEngineFactory.create(this.loader,
+				configuration.getRepositoryConfiguration(), resolutionContext);
+
+		GrapeEngineInstaller.install(grapeEngine);
+
+		this.loader.getConfiguration().addCompilationCustomizers(
+				new CompilerAutoConfigureCustomizer());
+		if (configuration.isAutoconfigure()) {
+			this.compilerAutoConfigurations = ServiceLoader
+					.load(CompilerAutoConfiguration.class);
+		}
+		else {
+			this.compilerAutoConfigurations = Collections.emptySet();
+		}
+
+		this.transformations = new ArrayList<ASTTransformation>();
+		this.transformations.add(new GrabMetadataTransformation(resolutionContext));
+		this.transformations.add(new DependencyAutoConfigurationTransformation(
+				this.loader, resolutionContext, this.compilerAutoConfigurations));
+		this.transformations.add(new GroovyBeansTransformation());
+		if (this.configuration.isGuessDependencies()) {
+			this.transformations.add(new ResolveDependencyCoordinatesTransformation(
+					resolutionContext));
+		}
+		for (ASTTransformation transformation : ServiceLoader
+				.load(SpringBootAstTransformation.class)) {
+			this.transformations.add(transformation);
+		}
+		Collections.sort(this.transformations, AnnotationAwareOrderComparator.INSTANCE);
+	}",85-121,8
+org.springframework.boot.cli.compiler.GroovyCompiler,compile,([Ljava/lang/String;)[Ljava/lang/Class;,12,26,46.2%,"public Class<?>[] compile(String... sources) throws CompilationFailedException,
+			IOException {
+
+		this.loader.clearCache();
+		List<Class<?>> classes = new ArrayList<Class<?>>();
+
+		CompilerConfiguration configuration = this.loader.getConfiguration();
+
+		CompilationUnit compilationUnit = new CompilationUnit(configuration, null,
+				this.loader);
+		ClassCollector collector = this.loader.createCollector(compilationUnit, null);
+		compilationUnit.setClassgenCallback(collector);
+
+		for (String source : sources) {
+			List<String> paths = ResourceUtils.getUrls(source, this.loader);
+			for (String path : paths) {
+				compilationUnit.addSource(new URL(path));
+			}
+		}
+
+		addAstTransformations(compilationUnit);
+
+		compilationUnit.compile(Phases.CLASS_GENERATION);
+		for (Object loadedClass : collector.getLoadedClasses()) {
+			classes.add((Class<?>) loadedClass);
+		}
+		ClassNode mainClassNode = getMainClass(compilationUnit);
+
+		Class<?> mainClass = null;
+		for (Class<?> loadedClass : classes) {
+			if (mainClassNode.getName().equals(loadedClass.getName())) {
+				mainClass = loadedClass;
+			}
+		}
+		if (mainClass != null) {
+			classes.remove(mainClass);
+			classes.add(0, mainClass);
+		}
+
+		return classes.toArray(new Class<?>[classes.size()]);
+	}",175-215,8
+org.springframework.boot.cli.compiler.GroovyCompiler$CompilerAutoConfigureCustomizer,<init>,(Lorg/springframework/boot/cli/compiler/GroovyCompiler;)V,3,3,100.0%,"public GroovyCompiler(final GroovyCompilerConfiguration configuration) {
+
+		this.configuration = configuration;
+		this.loader = createLoader(configuration);
+
+		DependencyResolutionContext resolutionContext = new DependencyResolutionContext();
+
+		AetherGrapeEngine grapeEngine = AetherGrapeEngineFactory.create(this.loader,
+				configuration.getRepositoryConfiguration(), resolutionContext);
+
+		GrapeEngineInstaller.install(grapeEngine);
+
+		this.loader.getConfiguration().addCompilationCustomizers(
+				new CompilerAutoConfigureCustomizer());
+		if (configuration.isAutoconfigure()) {
+			this.compilerAutoConfigurations = ServiceLoader
+					.load(CompilerAutoConfiguration.class);
+		}
+		else {
+			this.compilerAutoConfigurations = Collections.emptySet();
+		}
+
+		this.transformations = new ArrayList<ASTTransformation>();
+		this.transformations.add(new GrabMetadataTransformation(resolutionContext));
+		this.transformations.add(new DependencyAutoConfigurationTransformation(
+				this.loader, resolutionContext, this.compilerAutoConfigurations));
+		this.transformations.add(new GroovyBeansTransformation());
+		if (this.configuration.isGuessDependencies()) {
+			this.transformations.add(new ResolveDependencyCoordinatesTransformation(
+					resolutionContext));
+		}
+		for (ASTTransformation transformation : ServiceLoader
+				.load(SpringBootAstTransformation.class)) {
+			this.transformations.add(transformation);
+		}
+		Collections.sort(this.transformations, AnnotationAwareOrderComparator.INSTANCE);
+	}",85-121,8
+org.springframework.boot.cli.compiler.GroovyCompiler$1,<init>,(Lorg/springframework/boot/cli/compiler/GroovyCompiler;)V,1,1,100.0%,"public GroovyCompiler(final GroovyCompilerConfiguration configuration) {
+
+		this.configuration = configuration;
+		this.loader = createLoader(configuration);
+
+		DependencyResolutionContext resolutionContext = new DependencyResolutionContext();
+
+		AetherGrapeEngine grapeEngine = AetherGrapeEngineFactory.create(this.loader,
+				configuration.getRepositoryConfiguration(), resolutionContext);
+
+		GrapeEngineInstaller.install(grapeEngine);
+
+		this.loader.getConfiguration().addCompilationCustomizers(
+				new CompilerAutoConfigureCustomizer());
+		if (configuration.isAutoconfigure()) {
+			this.compilerAutoConfigurations = ServiceLoader
+					.load(CompilerAutoConfiguration.class);
+		}
+		else {
+			this.compilerAutoConfigurations = Collections.emptySet();
+		}
+
+		this.transformations = new ArrayList<ASTTransformation>();
+		this.transformations.add(new GrabMetadataTransformation(resolutionContext));
+		this.transformations.add(new DependencyAutoConfigurationTransformation(
+				this.loader, resolutionContext, this.compilerAutoConfigurations));
+		this.transformations.add(new GroovyBeansTransformation());
+		if (this.configuration.isGuessDependencies()) {
+			this.transformations.add(new ResolveDependencyCoordinatesTransformation(
+					resolutionContext));
+		}
+		for (ASTTransformation transformation : ServiceLoader
+				.load(SpringBootAstTransformation.class)) {
+			this.transformations.add(transformation);
+		}
+		Collections.sort(this.transformations, AnnotationAwareOrderComparator.INSTANCE);
+	}",85-121,8
+org.springframework.boot.cli.command.run.SpringApplicationRunner,<init>,(Lorg/springframework/boot/cli/command/run/SpringApplicationRunnerConfiguration;[Ljava/lang/String;[Ljava/lang/String;)V,10,15,66.7%,"public SpringApplicationRunner(
+			final SpringApplicationRunnerConfiguration configuration, String[] sources,
+			String... args) {
+		this.configuration = configuration;
+		this.sources = sources.clone();
+		this.args = args.clone();
+		this.compiler = new GroovyCompiler(configuration);
+		int level = configuration.getLogLevel().intValue();
+		if (level <= Level.FINER.intValue()) {
+			System.setProperty(""groovy.grape.report.downloads"", ""true"");
+			System.setProperty(""trace"", ""true"");
+		}
+		else if (level <= Level.FINE.intValue()) {
+			System.setProperty(""debug"", ""true"");
+		}
+		else if (level == Level.OFF.intValue()) {
+			System.setProperty(""spring.main.showBanner"", ""false"");
+			System.setProperty(""logging.level.ROOT"", ""OFF"");
+		}
+	}",63-82,6
+org.springframework.boot.cli.command.options.OptionHandler,<init>,()V,1,1,100.0%,"public OptionHelpAdapter(OptionDescriptor descriptor) {
+			this.options = new LinkedHashSet<String>();
+			for (String option : descriptor.options()) {
+				this.options.add((option.length() == 1 ? ""-"" : ""--"") + option);
+			}
+			if (this.options.contains(""--cp"")) {
+				this.options.remove(""--cp"");
+				this.options.add(""-cp"");
+			}
+			this.description = descriptor.description();
+		}",184-194,5
+org.springframework.boot.cli.compiler.GroovyCompiler,getIndexOfASTTransformationVisitor,(Ljava/util/LinkedList;)I,4,5,80.0%,"private int getIndexOfASTTransformationVisitor(LinkedList<?> conversionOperations) {
+		for (int index = 0; index < conversionOperations.size(); index++) {
+			if (conversionOperations.get(index).getClass().getName()
+					.startsWith(ASTTransformationVisitor.class.getName())) {
+				return index;
+			}
+		}
+		return conversionOperations.size();
+	}",251-259,5
+org.springframework.boot.cli.command.run.SpringApplicationRunner,compileAndRun,()V,4,17,23.5%,"public synchronized void compileAndRun() throws Exception {
+		try {
+
+			stop();
+
+			// Compile
+			Object[] compiledSources = this.compiler.compile(this.sources);
+			if (compiledSources.length == 0) {
+				throw new RuntimeException(""No classes found in '"" + this.sources + ""'"");
+			}
+
+			// Start monitoring for changes
+			if (this.fileWatchThread == null
+					&& this.configuration.isWatchForFileChanges()) {
+				this.fileWatchThread = new FileWatchThread();
+				this.fileWatchThread.start();
+			}
+
+			// Run in new thread to ensure that the context classloader is setup
+			this.runThread = new RunThread(compiledSources);
+			this.runThread.start();
+			this.runThread.join();
+		}
+		catch (Exception ex) {
+			if (this.fileWatchThread == null) {
+				throw ex;
+			}
+			else {
+				ex.printStackTrace();
+			}
+		}
+	}",89-120,5
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$DefaultScopeParentClassLoader,getGroovyJars,(Ljava/lang/ClassLoader;)[Ljava/net/URL;,6,6,100.0%,"private URL[] getGroovyJars(final ClassLoader parent) {
+			Set<URL> urls = new HashSet<URL>();
+			findGroovyJarsDirectly(parent, urls);
+			if (urls.isEmpty()) {
+				findGroovyJarsFromClassPath(parent, urls);
+			}
+			Assert.state(urls.size() > 0, ""Unable to find groovy JAR"");
+			return new ArrayList<URL>(urls).toArray(new URL[urls.size()]);
+		}",184-192,4
+org.springframework.boot.cli.compiler.AstUtils,hasAtLeastOneFieldOrMethod,(Lorg/codehaus/groovy/ast/ClassNode;[Ljava/lang/String;)Z,6,10,60.0%,"public static boolean hasAtLeastOneFieldOrMethod(ClassNode node, String... types) {
+		Set<String> typesSet = new HashSet<String>(Arrays.asList(types));
+		for (FieldNode field : node.getFields()) {
+			if (typesSet.contains(field.getType().getName())) {
+				return true;
+			}
+		}
+		for (MethodNode method : node.getMethods()) {
+			if (typesSet.contains(method.getReturnType().getName())) {
+				return true;
+			}
+		}
+		return false;
+	}",87-100,4
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter,reportProgress,()V,2,9,22.2%,"private void reportProgress() {
+		if (!this.finished && System.currentTimeMillis() - this.startTime > INITIAL_DELAY) {
+			if (!this.started) {
+				this.started = true;
+				this.out.print(""Resolving dependencies.."");
+				this.lastProgressTime = System.currentTimeMillis();
+			}
+			else if (System.currentTimeMillis() - this.lastProgressTime > PROGRESS_DELAY) {
+				this.out.print(""."");
+				this.lastProgressTime = System.currentTimeMillis();
+			}
+		}
+	}",76-88,4
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,createArtifact,(Ljava/util/Map;)Lorg/eclipse/aether/artifact/Artifact;,6,6,100.0%,"private Artifact createArtifact(Map<?, ?> dependencyMap) {
+		String group = (String) dependencyMap.get(""group"");
+		String module = (String) dependencyMap.get(""module"");
+		String version = (String) dependencyMap.get(""version"");
+		String classifier = (String) dependencyMap.get(""classifier"");
+		String type = determineType(dependencyMap);
+
+		return new DefaultArtifact(group, module, classifier, type, version);
+	}",169-177,4
+org.springframework.boot.cli.util.ResourceUtils,getUrlsFromWildcardPath,(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/util/List;,8,9,88.9%,"private static List<String> getUrlsFromWildcardPath(String path,
+			ClassLoader classLoader) throws IOException {
+		if (path.contains("":"")) {
+			return getUrlsFromPrefixedWildcardPath(path, classLoader);
+		}
+
+		Set<String> result = new LinkedHashSet<String>();
+		try {
+			result.addAll(getUrls(FILE_URL_PREFIX + path, classLoader));
+		}
+		catch (IllegalArgumentException ex) {
+			// ignore
+		}
+
+		path = stripLeadingSlashes(path);
+		result.addAll(getUrls(ALL_CLASSPATH_URL_PREFIX + path, classLoader));
+		return new ArrayList<String>(result);
+	}",86-103,3
+org.springframework.boot.cli.util.ResourceUtils,getUrlsFromPrefixedWildcardPath,(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/util/List;,9,11,81.8%,"private static List<String> getUrlsFromPrefixedWildcardPath(String path,
+			ClassLoader classLoader) throws IOException {
+		Resource[] resources = new PathMatchingResourcePatternResolver(
+				new FileSearchResourceLoader(classLoader)).getResources(path);
+		List<String> result = new ArrayList<String>();
+		for (Resource resource : resources) {
+			if (resource.exists()) {
+				if (resource.getURI().getScheme().equals(""file"")) {
+					if (resource.getFile().isDirectory()) {
+						result.addAll(getChildFiles(resource));
+						continue;
+					}
+				}
+				result.add(absolutePath(resource));
+			}
+		}
+		return result;
+	}",105-122,3
+org.springframework.boot.dependency.tools.AbstractDependencies,add,(Lorg/springframework/boot/dependency/tools/AbstractDependencies$ArtifactAndGroupId;Lorg/springframework/boot/dependency/tools/Dependency;)V,6,6,100.0%,"protected void add(ArtifactAndGroupId artifactAndGroupId, Dependency dependency) {
+		Dependency existing = this.byArtifactAndGroupId.get(artifactAndGroupId);
+		if (existing != null) {
+			dependency = mergeDependencies(existing, dependency);
+		}
+		this.byArtifactAndGroupId.put(artifactAndGroupId, dependency);
+		this.byArtifactId.put(dependency.getArtifactId(), dependency);
+	}",61-68,3
+org.springframework.boot.cli.command.options.OptionHandler,run,([Ljava/lang/String;)Lorg/springframework/boot/cli/command/status/ExitStatus;,4,6,66.7%,"public final ExitStatus run(String... args) throws Exception {
+		String[] argsToUse = args.clone();
+		for (int i = 0; i < argsToUse.length; i++) {
+			if (""-cp"".equals(argsToUse[i])) {
+				argsToUse[i] = ""--cp"";
+			}
+		}
+		OptionSet options = getParser().parse(args);
+		return run(options);
+	}",84-93,3
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$DefaultScopeParentClassLoader,findGroovyJarsDirectly,(Ljava/lang/ClassLoader;Ljava/util/Set;)V,6,7,85.7%,"private void findGroovyJarsDirectly(ClassLoader classLoader, Set<URL> urls) {
+			while (classLoader != null) {
+				if (classLoader instanceof URLClassLoader) {
+					for (URL url : ((URLClassLoader) classLoader).getURLs()) {
+						if (isGroovyJar(url.toString())) {
+							urls.add(url);
+						}
+					}
+				}
+				classLoader = classLoader.getParent();
+			}
+		}",194-205,3
+org.springframework.boot.cli.compiler.RepositoryConfigurationFactory,createDefaultRepositoryConfiguration,()Ljava/util/List;,7,7,100.0%,"public static List<RepositoryConfiguration> createDefaultRepositoryConfiguration() {
+		List<RepositoryConfiguration> repositoryConfiguration = new ArrayList<RepositoryConfiguration>();
+
+		repositoryConfiguration.add(MAVEN_CENTRAL);
+
+		if (!Boolean.getBoolean(""disableSpringSnapshotRepos"")) {
+			repositoryConfiguration.add(SPRING_MILESTONE);
+			repositoryConfiguration.add(SPRING_SNAPSHOT);
+		}
+
+		addDefaultCacheAsRespository(repositoryConfiguration);
+		return repositoryConfiguration;
+	}",47-59,3
+org.springframework.boot.cli.compiler.AnnotatedNodeASTTransformation,visitAnnotatedNode,(Lorg/codehaus/groovy/ast/AnnotatedNode;)V,7,7,100.0%,"private void visitAnnotatedNode(AnnotatedNode annotatedNode) {
+		if (annotatedNode != null) {
+			for (AnnotationNode annotationNode : annotatedNode.getAnnotations()) {
+				if (this.interestingAnnotationNames.contains(annotationNode
+						.getClassNode().getName())) {
+					this.annotationNodes.add(annotationNode);
+				}
+			}
+		}
+	}",95-104,3
+org.springframework.boot.cli.compiler.GrabMetadataTransformation,processAnnotationNodes,(Ljava/util/List;)V,2,7,28.6%,"@Override
+	protected void processAnnotationNodes(List<AnnotationNode> annotationNodes) {
+		if (!annotationNodes.isEmpty()) {
+			if (annotationNodes.size() > 1) {
+				for (AnnotationNode annotationNode : annotationNodes) {
+					handleDuplicateGrabMetadataAnnotation(annotationNode);
+				}
+			}
+			else {
+				processGrabMetadataAnnotation(annotationNodes.get(0));
+			}
+		}
+	}",71-83,3
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngineFactory,createRepositories,(Ljava/util/List;)Ljava/util/List;,11,11,100.0%,"private static List<RemoteRepository> createRepositories(
+			List<RepositoryConfiguration> repositoryConfigurations) {
+		List<RemoteRepository> repositories = new ArrayList<RemoteRepository>(
+				repositoryConfigurations.size());
+		for (RepositoryConfiguration repositoryConfiguration : repositoryConfigurations) {
+			RemoteRepository.Builder builder = new RemoteRepository.Builder(
+					repositoryConfiguration.getName(), ""default"", repositoryConfiguration
+							.getUri().toASCIIString());
+
+			if (!repositoryConfiguration.getSnapshotsEnabled()) {
+				builder.setSnapshotPolicy(new RepositoryPolicy(false,
+						RepositoryPolicy.UPDATE_POLICY_NEVER,
+						RepositoryPolicy.CHECKSUM_POLICY_IGNORE));
+			}
+			repositories.add(builder.build());
+		}
+		return repositories;
+	}",81-98,3
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,determineType,(Ljava/util/Map;)Ljava/lang/String;,7,9,77.8%,"private String determineType(Map<?, ?> dependencyMap) {
+		String type = (String) dependencyMap.get(""type"");
+		String ext = (String) dependencyMap.get(""ext"");
+
+		if (type == null) {
+			type = ext;
+			if (type == null) {
+				type = ""jar"";
+			}
+		}
+		else if (ext != null && !type.equals(ext)) {
+			throw new IllegalArgumentException(
+					""If both type and ext are specified they must have the same value"");
+		}
+		return type;
+	}",179-194,3
+org.springframework.boot.cli.util.ResourceUtils,absolutePath,(Lorg/springframework/core/io/Resource;)Ljava/lang/String;,2,3,66.7%,"private static String absolutePath(Resource resource) throws IOException {
+		if (!resource.getURI().getScheme().equals(""file"")) {
+			return resource.getURL().toExternalForm();
+		}
+		return resource.getFile().getAbsoluteFile().toURI().toString();
+	}",136-141,2
+org.springframework.boot.dependency.tools.AbstractDependencies$ArtifactAndGroupId,hashCode,()I,1,1,100.0%,"@Override
+		public int hashCode() {
+			return this.groupId.hashCode() * 31 + this.artifactId.hashCode();
+		}",103-106,2
+org.springframework.boot.dependency.tools.AbstractDependencies$ArtifactAndGroupId,equals,(Ljava/lang/Object;)Z,8,11,72.7%,"@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (getClass() == obj.getClass()) {
+				ArtifactAndGroupId other = (ArtifactAndGroupId) obj;
+				boolean result = true;
+				result &= this.groupId.equals(other.groupId);
+				result &= this.artifactId.equals(other.artifactId);
+				return result;
+			}
+			return false;
+		}",108-124,2
+org.springframework.boot.dependency.tools.AbstractDependencies,iterator,()Ljava/util/Iterator;,1,1,100.0%,"@Override
+	public Iterator<Dependency> iterator() {
+		return this.byArtifactAndGroupId.values().iterator();
+	}",56-59,2
+org.springframework.boot.dependency.tools.AbstractDependencies,mergeDependencies,(Lorg/springframework/boot/dependency/tools/Dependency;Lorg/springframework/boot/dependency/tools/Dependency;)Lorg/springframework/boot/dependency/tools/Dependency;,5,5,100.0%,"private Dependency mergeDependencies(Dependency existingDependency,
+			Dependency newDependency) {
+		Set<Exclusion> combinedExclusions = new LinkedHashSet<Exclusion>();
+		combinedExclusions.addAll(existingDependency.getExclusions());
+		combinedExclusions.addAll(newDependency.getExclusions());
+		return new Dependency(newDependency.getGroupId(), newDependency.getArtifactId(),
+				newDependency.getVersion(), new ArrayList<Exclusion>(combinedExclusions));
+	}",70-77,2
+org.springframework.boot.cli.compiler.GroovyCompiler,getExistingUrls,()[Ljava/net/URL;,3,4,75.0%,"private URL[] getExistingUrls() {
+		ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+		if (tccl instanceof ExtendedGroovyClassLoader) {
+			return ((ExtendedGroovyClassLoader) tccl).getURLs();
+		}
+		else {
+			return new URL[0];
+		}
+	}",152-160,2
+org.springframework.boot.cli.compiler.GroovyCompiler,processConversionOperations,(Ljava/util/LinkedList;)V,3,3,100.0%,"@SuppressWarnings({ ""rawtypes"", ""unchecked"" })
+	private void processConversionOperations(LinkedList conversionOperations) {
+		int index = getIndexOfASTTransformationVisitor(conversionOperations);
+		conversionOperations.add(index, new CompilationUnit.SourceUnitOperation() {
+			@Override
+			public void call(SourceUnit source) throws CompilationFailedException {
+				ASTNode[] nodes = new ASTNode[] { source.getAST() };
+				for (ASTTransformation transformation : GroovyCompiler.this.transformations) {
+					transformation.visit(nodes, source);
+				}
+			}
+		});
+	}",237-249,2
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader,createParentClassLoader,(Lorg/springframework/boot/cli/compiler/GroovyCompilerScope;)Ljava/lang/ClassLoader;,4,4,100.0%,"private static ClassLoader createParentClassLoader(GroovyCompilerScope scope) {
+		ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+		if (scope == GroovyCompilerScope.DEFAULT) {
+			classLoader = new DefaultScopeParentClassLoader(classLoader);
+		}
+		return classLoader;
+	}",66-72,2
+org.springframework.boot.cli.compiler.RepositoryConfigurationFactory,addDefaultCacheAsRespository,(Ljava/util/List;)V,5,5,100.0%,"public static void addDefaultCacheAsRespository(
+			List<RepositoryConfiguration> repositoryConfiguration) {
+		RepositoryConfiguration repository = new RepositoryConfiguration(""local"",
+				new File(getM2HomeDirectory(), ""repository"").toURI(), true);
+		if (!repositoryConfiguration.contains(repository)) {
+			repositoryConfiguration.add(0, repository);
+		}
+	}",66-73,2
+org.springframework.boot.cli.compiler.AnnotatedNodeASTTransformation,visit,([Lorg/codehaus/groovy/ast/ASTNode;Lorg/codehaus/groovy/control/SourceUnit;)V,18,26,69.2%,"@Override
+	public void visit(ASTNode[] nodes, SourceUnit source) {
+		this.sourceUnit = source;
+
+		ClassVisitor classVisitor = new ClassVisitor(source);
+		for (ASTNode node : nodes) {
+			if (node instanceof ModuleNode) {
+				ModuleNode module = (ModuleNode) node;
+
+				visitAnnotatedNode(module.getPackage());
+
+				for (ImportNode importNode : module.getImports()) {
+					visitAnnotatedNode(importNode);
+				}
+				for (ImportNode importNode : module.getStarImports()) {
+					visitAnnotatedNode(importNode);
+				}
+				for (Map.Entry<String, ImportNode> entry : module.getStaticImports()
+						.entrySet()) {
+					visitAnnotatedNode(entry.getValue());
+				}
+				for (Map.Entry<String, ImportNode> entry : module.getStaticStarImports()
+						.entrySet()) {
+					visitAnnotatedNode(entry.getValue());
+				}
+
+				for (ClassNode classNode : module.getClasses()) {
+					visitAnnotatedNode(classNode);
+					classNode.visitContents(classVisitor);
+				}
+			}
+		}
+
+		processAnnotationNodes(this.annotationNodes);
+	}",53-87,2
+org.springframework.boot.cli.compiler.AstUtils,subclasses,(Lorg/codehaus/groovy/ast/ClassNode;[Ljava/lang/String;)Z,3,4,75.0%,"public static boolean subclasses(ClassNode node, String... types) {
+		for (String type : types) {
+			if (node.getSuperClass().getName().equals(type)) {
+				return true;
+			}
+		}
+		return false;
+	}",106-113,2
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,createMirrorSelector,(Lorg/apache/maven/settings/Settings;)Lorg/eclipse/aether/repository/MirrorSelector;,3,6,50.0%,"private MirrorSelector createMirrorSelector(Settings settings) {
+		DefaultMirrorSelector selector = new DefaultMirrorSelector();
+		for (Mirror mirror : settings.getMirrors()) {
+			selector.add(mirror.getId(), mirror.getUrl(), mirror.getLayout(), false,
+					mirror.getMirrorOf(), mirror.getMirrorOfLayouts());
+		}
+		return selector;
+	}",135-142,2
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,createAuthenticationSelector,(Ljava/util/List;)Lorg/eclipse/aether/repository/AuthenticationSelector;,3,8,37.5%,"private AuthenticationSelector createAuthenticationSelector(List<Server> servers) {
+		DefaultAuthenticationSelector selector = new DefaultAuthenticationSelector();
+		for (Server server : servers) {
+			AuthenticationBuilder auth = new AuthenticationBuilder();
+			auth.addUsername(server.getUsername()).addPassword(server.getPassword());
+			auth.addPrivateKey(server.getPrivateKey(), server.getPassphrase());
+			selector.add(server.getId(), auth.build());
+		}
+		return new ConservativeAuthenticationSelector(selector);
+	}",144-153,2
+org.springframework.boot.cli.compiler.grape.GrapeEngineInstaller,install,(Lgroovy/grape/GrapeEngine;)V,7,9,77.8%,"public static void install(GrapeEngine engine) {
+		synchronized (Grape.class) {
+			try {
+				Field field = Grape.class.getDeclaredField(""instance"");
+				field.setAccessible(true);
+				field.set(null, engine);
+			}
+			catch (Exception ex) {
+				throw new IllegalStateException(""Failed to install GrapeEngine"", ex);
+			}
+		}
+	}",31-42,2
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,createExclusions,(Ljava/util/Map;)Ljava/util/List;,6,9,66.7%,"@SuppressWarnings(""unchecked"")
+	private List<Exclusion> createExclusions(Map<?, ?> args) {
+		List<Exclusion> exclusions = new ArrayList<Exclusion>();
+		if (args != null) {
+			List<Map<String, Object>> exclusionMaps = (List<Map<String, Object>>) args
+					.get(""excludes"");
+			if (exclusionMaps != null) {
+				for (Map<String, Object> exclusionMap : exclusionMaps) {
+					exclusions.add(createExclusion(exclusionMap));
+				}
+			}
+		}
+		return exclusions;
+	}",128-141,2
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,addRepository,(Lorg/eclipse/aether/repository/RemoteRepository;)V,6,7,85.7%,"protected void addRepository(RemoteRepository repository) {
+		if (this.repositories.contains(repository)) {
+			return;
+		}
+
+		repository = getPossibleMirror(repository);
+		repository = applyProxy(repository);
+		repository = applyAuthentication(repository);
+
+		this.repositories.add(0, repository);
+	}",262-272,2
+org.springframework.boot.cli.command.run.RunCommand$RunOptionHandler,run,(Ljoptsimple/OptionSet;)Lorg/springframework/boot/cli/command/status/ExitStatus;,8,11,72.7%,"@Override
+		protected synchronized ExitStatus run(OptionSet options) throws Exception {
+
+			if (this.runner != null) {
+				throw new RuntimeException(
+						""Already running. Please stop the current application before running another (use the 'stop' command)."");
+			}
+
+			SourceOptions sourceOptions = new SourceOptions(options);
+
+			List<RepositoryConfiguration> repositoryConfiguration = RepositoryConfigurationFactory
+					.createDefaultRepositoryConfiguration();
+			repositoryConfiguration.add(0, new RepositoryConfiguration(""local"", new File(
+					""repository"").toURI(), true));
+
+			SpringApplicationRunnerConfiguration configuration = new SpringApplicationRunnerConfigurationAdapter(
+					options, this, repositoryConfiguration);
+
+			this.runner = new SpringApplicationRunner(configuration,
+					sourceOptions.getSourcesArray(), sourceOptions.getArgsArray());
+			this.runner.compileAndRun();
+
+			return ExitStatus.OK;
+		}",88-111,2
+org.springframework.boot.cli.compiler.autoconfigure.SpringMvcCompilerAutoConfiguration,applyDependencies,(Lorg/springframework/boot/cli/compiler/DependencyCustomizer;)V,5,5,100.0%,"@Override
+	public void applyDependencies(DependencyCustomizer dependencies) {
+		dependencies
+				.ifAnyMissingClasses(""org.springframework.web.servlet.mvc.Controller"")
+				.add(""spring-boot-starter-web"");
+		dependencies.ifAnyMissingClasses(""groovy.text.TemplateEngine"").add(
+				""groovy-templates"");
+	}",40-47,2
+org.springframework.boot.cli.util.ResourceUtils$FileSearchResourceLoader,getResource,(Ljava/lang/String;)Lorg/springframework/core/io/Resource;,5,11,45.5%,"@Override
+		public Resource getResource(String location) {
+			Assert.notNull(location, ""Location must not be null"");
+			if (location.startsWith(CLASSPATH_URL_PREFIX)) {
+				return new ClassPathResource(location.substring(CLASSPATH_URL_PREFIX
+						.length()), getClassLoader());
+			}
+			else {
+				if (location.startsWith(FILE_URL_PREFIX)) {
+					Resource resource = this.files.getResource(location);
+					return resource;
+				}
+				try {
+					// Try to parse the location as a URL...
+					URL url = new URL(location);
+					return new UrlResource(url);
+				}
+				catch (MalformedURLException ex) {
+					// No URL -> resolve as resource path.
+					return getResourceByPath(location);
+				}
+			}
+		}",159-181,1
+org.springframework.boot.dependency.tools.ManagedDependencies,iterator,()Ljava/util/Iterator;,1,1,100.0%,"@Override
+	public Iterator<Dependency> iterator() {
+		return this.delegate.iterator();
+	}",83-86,1
+org.springframework.boot.dependency.tools.AbstractDependencies,find,(Ljava/lang/String;)Lorg/springframework/boot/dependency/tools/Dependency;,1,1,100.0%,"@Override
+	public Dependency find(String groupId, String artifactId) {
+		return this.byArtifactAndGroupId.get(new ArtifactAndGroupId(groupId, artifactId));
+	}",46-49,1
+org.springframework.boot.dependency.tools.AbstractDependencies,find,(Ljava/lang/String;Ljava/lang/String;)Lorg/springframework/boot/dependency/tools/Dependency;,1,1,100.0%,"@Override
+	public Dependency find(String groupId, String artifactId) {
+		return this.byArtifactAndGroupId.get(new ArtifactAndGroupId(groupId, artifactId));
+	}",46-49,1
+org.springframework.boot.dependency.tools.PomDependencies,<init>,(Ljava/io/InputStream;)V,7,9,77.8%,"public PomDependencies(InputStream effectivePomInputStream) {
+		try {
+			Document effectivePom = readDocument(effectivePomInputStream);
+			for (Dependency dependency : readDependencies(effectivePom)) {
+				add(new ArtifactAndGroupId(dependency), dependency);
+			}
+		}
+		catch (Exception ex) {
+			throw new IllegalStateException(ex);
+		}
+	}",47-57,1
+org.springframework.boot.dependency.tools.PomDependencies,readDocument,(Ljava/io/InputStream;)Lorg/w3c/dom/Document;,7,8,87.5%,"private Document readDocument(InputStream inputStream) throws Exception {
+		if (inputStream == null) {
+			return null;
+		}
+		try {
+			DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder builder = builderFactory.newDocumentBuilder();
+			Document document = builder.parse(inputStream);
+			document.getDocumentElement().normalize();
+			return document;
+		}
+		finally {
+			inputStream.close();
+		}
+	}",59-73,1
+org.springframework.boot.dependency.tools.PomDependencies,readDependencies,(Lorg/w3c/dom/Document;)Ljava/util/List;,10,10,100.0%,"private List<Dependency> readDependencies(Document document) throws Exception {
+		Element element = (Element) document.getElementsByTagName(""project"").item(0);
+		element = (Element) element.getElementsByTagName(""dependencyManagement"").item(0);
+		element = (Element) element.getElementsByTagName(""dependencies"").item(0);
+		NodeList nodes = element.getChildNodes();
+		List<Dependency> dependencies = new ArrayList<Dependency>();
+		for (int i = 0; i < nodes.getLength(); i++) {
+			Node node = nodes.item(i);
+			if (node instanceof Element) {
+				dependencies.add(createDependency((Element) node));
+			}
+		}
+		return dependencies;
+	}",75-88,1
+org.springframework.boot.dependency.tools.ManagedDependenciesDelegate,addAll,(Lorg/springframework/boot/dependency/tools/Dependencies;)V,4,4,100.0%,"private void addAll(Dependencies dependencies) {
+		for (Dependency dependency : dependencies) {
+			add(new ArtifactAndGroupId(dependency), dependency);
+		}
+	}",52-56,1
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$DefaultScopeParentClassLoader,findGroovyJarsFromClassPath,(Ljava/lang/ClassLoader;Ljava/util/Set;)V,9,10,90.0%,"private void findGroovyJarsFromClassPath(ClassLoader parent, Set<URL> urls) {
+			String classpath = System.getProperty(""java.class.path"");
+			String[] entries = classpath.split(System.getProperty(""path.separator""));
+			for (String entry : entries) {
+				if (isGroovyJar(entry)) {
+					File file = new File(entry);
+					if (file.canRead()) {
+						try {
+							urls.add(file.toURI().toURL());
+						}
+						catch (MalformedURLException ex) {
+							// Swallow and continue
+						}
+					}
+				}
+			}
+		}",207-223,1
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$DefaultScopeParentClassLoader,isGroovyJar,(Ljava/lang/String;)Z,5,5,100.0%,"private boolean isGroovyJar(String entry) {
+			entry = StringUtils.cleanPath(entry);
+			for (String jarPrefix : GROOVY_JARS_PREFIXES) {
+				if (entry.contains(""/"" + jarPrefix + ""-"")) {
+					return true;
+				}
+			}
+			return false;
+		}",225-233,1
+org.springframework.boot.cli.compiler.GroovyCompiler,getPhaseOperations,(Lorg/codehaus/groovy/control/CompilationUnit;)[Ljava/util/LinkedList;,4,6,66.7%,"@SuppressWarnings(""rawtypes"")
+	private LinkedList[] getPhaseOperations(CompilationUnit compilationUnit) {
+		try {
+			Field field = CompilationUnit.class.getDeclaredField(""phaseOperations"");
+			field.setAccessible(true);
+			LinkedList[] phaseOperations = (LinkedList[]) field.get(compilationUnit);
+			return phaseOperations;
+		}
+		catch (Exception ex) {
+			throw new IllegalStateException(
+					""Phase operations not available from compilation unit"");
+		}
+	}",223-235,1
+org.springframework.boot.cli.compiler.DependencyCustomizer$1,<init>,(Lorg/springframework/boot/cli/compiler/DependencyCustomizer;Lorg/springframework/boot/cli/compiler/DependencyCustomizer;[Ljava/lang/String;)V,1,1,100.0%,"public DependencyCustomizer(GroovyClassLoader loader, ModuleNode moduleNode,
+			DependencyResolutionContext dependencyResolutionContext) {
+		this.loader = loader;
+		this.classNode = moduleNode.getClasses().get(0);
+		this.dependencyResolutionContext = dependencyResolutionContext;
+	}",52-57,1
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader,createCollector,(Lorg/codehaus/groovy/control/CompilationUnit;Lorg/codehaus/groovy/control/SourceUnit;)Lgroovy/lang/GroovyClassLoader$ClassCollector;,3,3,100.0%,"@Override
+	public ClassCollector createCollector(CompilationUnit unit, SourceUnit su) {
+		InnerLoader loader = AccessController
+				.doPrivileged(new PrivilegedAction<InnerLoader>() {
+					@Override
+					public InnerLoader run() {
+						return new InnerLoader(ExtendedGroovyClassLoader.this) {
+							// Don't return URLs from the inner loader so that Tomcat only
+							// searches the parent. Fixes 'TLD skipped' issues
+							@Override
+							public URL[] getURLs() {
+								return NO_URLS;
+							}
+						};
+					}
+				});
+		return new ExtendedClassCollector(loader, unit, su);
+	}",127-144,1
+org.springframework.boot.cli.compiler.DependencyCustomizer,<init>,(Lgroovy/lang/GroovyClassLoader;Lorg/codehaus/groovy/ast/ModuleNode;Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;)V,5,5,100.0%,"public DependencyCustomizer(GroovyClassLoader loader, ModuleNode moduleNode,
+			DependencyResolutionContext dependencyResolutionContext) {
+		this.loader = loader;
+		this.classNode = moduleNode.getClasses().get(0);
+		this.dependencyResolutionContext = dependencyResolutionContext;
+	}",52-57,1
+org.springframework.boot.cli.compiler.DependencyCustomizer,<init>,(Lorg/springframework/boot/cli/compiler/DependencyCustomizer;)V,5,5,100.0%,"public DependencyCustomizer(GroovyClassLoader loader, ModuleNode moduleNode,
+			DependencyResolutionContext dependencyResolutionContext) {
+		this.loader = loader;
+		this.classNode = moduleNode.getClasses().get(0);
+		this.dependencyResolutionContext = dependencyResolutionContext;
+	}",52-57,1
+org.springframework.boot.cli.compiler.DependencyCustomizer,add,([Ljava/lang/String;)Lorg/springframework/boot/cli/compiler/DependencyCustomizer;,3,3,100.0%,"public DependencyCustomizer add(String... modules) {
+		for (String module : modules) {
+			add(module, null, null, true);
+		}
+		return this;
+	}",189-194,1
+org.springframework.boot.cli.compiler.DependencyCustomizer,add,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lorg/springframework/boot/cli/compiler/DependencyCustomizer;,8,8,100.0%,"public DependencyCustomizer add(String... modules) {
+		for (String module : modules) {
+			add(module, null, null, true);
+		}
+		return this;
+	}",189-194,1
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,applyGroupAndVersion,(Lorg/codehaus/groovy/ast/AnnotationNode;Ljava/lang/String;)V,9,11,81.8%,"private void applyGroupAndVersion(AnnotationNode annotation, String module) {
+		if (module != null) {
+			setMember(annotation, ""module"", module);
+		}
+		else {
+			Expression expression = annotation.getMembers().get(""module"");
+			module = (String) ((ConstantExpression) expression).getValue();
+		}
+		if (annotation.getMember(""group"") == null) {
+			setMember(annotation, ""group"", this.resolutionContext
+					.getArtifactCoordinatesResolver().getGroupId(module));
+		}
+		if (annotation.getMember(""version"") == null) {
+			setMember(annotation, ""version"", this.resolutionContext
+					.getArtifactCoordinatesResolver().getVersion(module));
+		}
+	}",86-102,1
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,apply,(Lorg/eclipse/aether/DefaultRepositorySystemSession;Lorg/eclipse/aether/RepositorySystem;)V,11,13,84.6%,"@Override
+	public void apply(DefaultRepositorySystemSession session,
+			RepositorySystem repositorySystem) {
+
+		Settings settings = loadSettings();
+		SettingsDecryptionResult decryptionResult = decryptSettings(settings);
+		if (!decryptionResult.getProblems().isEmpty()) {
+			Log.error(""Maven settings decryption failed. Some Maven repositories may be inaccessible"");
+			// Continue - the encrypted credentials may not be used
+		}
+
+		session.setOffline(settings.isOffline());
+		session.setMirrorSelector(createMirrorSelector(settings));
+		session.setAuthenticationSelector(createAuthenticationSelector(decryptionResult
+				.getServers()));
+		session.setProxySelector(createProxySelector(decryptionResult.getProxies()));
+
+		String localRepository = settings.getLocalRepository();
+		if (localRepository != null) {
+			session.setLocalRepositoryManager(repositorySystem.newLocalRepositoryManager(
+					session, new LocalRepository(localRepository)));
+		}
+	}",71-93,1
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,setField,(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V,5,7,71.4%,"private void setField(Class<?> clazz, String fieldName, Object target, Object value) {
+		try {
+			Field field = clazz.getDeclaredField(fieldName);
+			field.setAccessible(true);
+			field.set(target, value);
+		}
+		catch (Exception e) {
+			throw new IllegalStateException(""Failed to set field '"" + fieldName
+					+ ""' on '"" + target + ""'"", e);
+		}
+	}",123-133,1
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,createProxySelector,(Ljava/util/List;)Lorg/eclipse/aether/repository/ProxySelector;,3,10,30.0%,"private ProxySelector createProxySelector(List<Proxy> proxies) {
+		DefaultProxySelector selector = new DefaultProxySelector();
+		for (Proxy proxy : proxies) {
+			Authentication authentication = new AuthenticationBuilder()
+					.addUsername(proxy.getUsername()).addPassword(proxy.getPassword())
+					.build();
+			selector.add(new org.eclipse.aether.repository.Proxy(proxy.getProtocol(),
+					proxy.getHost(), proxy.getPort(), authentication), proxy
+					.getNonProxyHosts());
+		}
+		return selector;
+	}",155-166,1
+org.springframework.boot.cli.compiler.grape.ManagedDependenciesFactory,getManagedDependencies,()Ljava/util/List;,6,6,100.0%,"public List<Dependency> getManagedDependencies() {
+		List<Dependency> result = new ArrayList<Dependency>();
+		for (org.springframework.boot.dependency.tools.Dependency dependency : this.dependencies) {
+			Artifact artifact = asArtifact(dependency);
+			result.add(new Dependency(artifact, JavaScopes.COMPILE));
+		}
+		return result;
+	}",49-56,1
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngineFactory,create,(Lgroovy/lang/GroovyClassLoader;Ljava/util/List;Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;)Lorg/springframework/boot/cli/compiler/grape/AetherGrapeEngine;,10,10,100.0%,"public static AetherGrapeEngine create(GroovyClassLoader classLoader,
+			List<RepositoryConfiguration> repositoryConfigurations,
+			DependencyResolutionContext dependencyResolutionContext) {
+
+		RepositorySystem repositorySystem = createServiceLocator().getService(
+				RepositorySystem.class);
+
+		DefaultRepositorySystemSession repositorySystemSession = MavenRepositorySystemUtils
+				.newSession();
+
+		ServiceLoader<RepositorySystemSessionAutoConfiguration> autoConfigurations = ServiceLoader
+				.load(RepositorySystemSessionAutoConfiguration.class);
+
+		for (RepositorySystemSessionAutoConfiguration autoConfiguration : autoConfigurations) {
+			autoConfiguration.apply(repositorySystemSession, repositorySystem);
+		}
+
+		new DefaultRepositorySystemSessionAutoConfiguration().apply(
+				repositorySystemSession, repositorySystem);
+
+		return new AetherGrapeEngine(classLoader, repositorySystem,
+				repositorySystemSession, createRepositories(repositoryConfigurations),
+				dependencyResolutionContext);
+	}",46-69,1
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,createDependencies,([Ljava/util/Map;Ljava/util/List;)Ljava/util/List;,4,4,100.0%,"private List<Dependency> createDependencies(Map<?, ?>[] dependencyMaps,
+			List<Exclusion> exclusions) {
+		List<Dependency> dependencies = new ArrayList<Dependency>(dependencyMaps.length);
+		for (Map<?, ?> dependencyMap : dependencyMaps) {
+			dependencies.add(createDependency(dependencyMap, exclusions));
+		}
+		return dependencies;
+	}",149-156,1
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,isTransitive,(Ljava/util/Map;)Z,2,2,100.0%,"private boolean isTransitive(Map<?, ?> dependencyMap) {
+		Boolean transitive = (Boolean) dependencyMap.get(""transitive"");
+		return (transitive == null ? true : transitive);
+	}",196-199,1
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,resolve,(Ljava/util/List;)Ljava/util/List;,9,13,69.2%,"private List<File> resolve(List<Dependency> dependencies)
+			throws ArtifactResolutionException {
+
+		try {
+			CollectRequest collectRequest = new CollectRequest((Dependency) null,
+					dependencies, new ArrayList<RemoteRepository>(this.repositories));
+			collectRequest.setManagedDependencies(this.resolutionContext
+					.getManagedDependencies());
+
+			DependencyRequest dependencyRequest = new DependencyRequest(collectRequest,
+					DependencyFilterUtils.classpathFilter(JavaScopes.COMPILE,
+							JavaScopes.RUNTIME));
+
+			DependencyResult dependencyResult = this.repositorySystem
+					.resolveDependencies(this.session, dependencyRequest);
+
+			this.resolutionContext.getManagedDependencies().addAll(
+					getDependencies(dependencyResult));
+
+			return getFiles(dependencyResult);
+		}
+		catch (Exception ex) {
+			throw new DependencyResolutionFailedException(ex);
+		}
+		finally {
+			this.progressReporter.finished();
+		}
+	}",201-228,1
+org.springframework.boot.cli.command.run.SpringApplicationRunner,stop,()V,2,4,50.0%,"public void stop() {
+		if (this.runThread != null) {
+			this.runThread.shutdown();
+			this.runThread = null;
+		}
+	}",252-257,1
+org.springframework.boot.cli.compiler.autoconfigure.SpringBootCompilerAutoConfiguration,applyDependencies,(Lorg/springframework/boot/cli/compiler/DependencyCustomizer;)V,3,3,100.0%,"@Override
+	public void applyDependencies(DependencyCustomizer dependencies) {
+		dependencies.ifAnyMissingClasses(""org.springframework.boot.SpringApplication"")
+				.add(""spring-boot-starter"");
+	}",40-44,1
+org.springframework.boot.cli.util.ResourceUtils,getUrls,(Ljava/lang/String;Ljava/lang/ClassLoader;)Ljava/util/List;,4,6,66.7%,"public static List<String> getUrls(String path, ClassLoader classLoader) {
+
+		if (classLoader == null) {
+			classLoader = ClassUtils.getDefaultClassLoader();
+		}
+
+		path = StringUtils.cleanPath(path);
+
+		try {
+			return getUrlsFromWildcardPath(path, classLoader);
+		}
+		catch (Exception ex) {
+			throw new IllegalArgumentException(""Cannot create URL from path ["" + path
+					+ ""]"", ex);
+
+		}
+	}",68-84,0
+org.springframework.boot.cli.util.ResourceUtils,stripLeadingSlashes,(Ljava/lang/String;)Ljava/lang/String;,2,3,66.7%,"private static String stripLeadingSlashes(String path) {
+		while (path.startsWith(""/"")) {
+			path = path.substring(1);
+		}
+		return path;
+	}",143-148,0
+org.springframework.boot.cli.util.ResourceUtils$FileSearchResourceLoader,<init>,(Ljava/lang/ClassLoader;)V,3,3,100.0%,"public FileSearchResourceLoader(ClassLoader classLoader) {
+			super(classLoader);
+			this.files = new FileSystemResourceLoader();
+		}",154-157,0
+org.springframework.boot.dependency.tools.ManagedDependencies,getSpringBootVersion,()Ljava/lang/String;,2,2,100.0%,"public String getSpringBootVersion() {
+		Dependency dependency = find(""org.springframework.boot"", ""spring-boot"");
+		return (dependency == null ? null : dependency.getVersion());
+	}",54-57,0
+org.springframework.boot.dependency.tools.ManagedDependencies,find,(Ljava/lang/String;)Lorg/springframework/boot/dependency/tools/Dependency;,1,1,100.0%,"@Override
+	public Dependency find(String groupId, String artifactId) {
+		return this.delegate.find(groupId, artifactId);
+	}",65-68,0
+org.springframework.boot.dependency.tools.ManagedDependencies,find,(Ljava/lang/String;Ljava/lang/String;)Lorg/springframework/boot/dependency/tools/Dependency;,1,1,100.0%,"@Override
+	public Dependency find(String groupId, String artifactId) {
+		return this.delegate.find(groupId, artifactId);
+	}",65-68,0
+org.springframework.boot.dependency.tools.Assert,notNull,(Ljava/lang/Object;Ljava/lang/String;)V,2,3,66.7%,"public static void notNull(Object object, String message) {
+		if (object == null) {
+			throw new IllegalArgumentException(message);
+		}
+	}",26-30,0
+org.springframework.boot.dependency.tools.AbstractDependencies$ArtifactAndGroupId,<init>,(Ljava/lang/String;Ljava/lang/String;)V,6,6,100.0%,"public AbstractDependencies() {
+		this.byArtifactAndGroupId = new LinkedHashMap<ArtifactAndGroupId, Dependency>();
+		this.byArtifactId = new LinkedHashMap<String, Dependency>();
+	}",41-44,0
+org.springframework.boot.dependency.tools.AbstractDependencies$ArtifactAndGroupId,<init>,(Lorg/springframework/boot/dependency/tools/Dependency;)V,2,2,100.0%,"public AbstractDependencies() {
+		this.byArtifactAndGroupId = new LinkedHashMap<ArtifactAndGroupId, Dependency>();
+		this.byArtifactId = new LinkedHashMap<String, Dependency>();
+	}",41-44,0
+org.springframework.boot.dependency.tools.AbstractDependencies,<init>,()V,4,4,100.0%,"public AbstractDependencies() {
+		this.byArtifactAndGroupId = new LinkedHashMap<ArtifactAndGroupId, Dependency>();
+		this.byArtifactId = new LinkedHashMap<String, Dependency>();
+	}",41-44,0
+org.springframework.boot.dependency.tools.PomDependencies,createDependency,(Lorg/w3c/dom/Element;)Lorg/springframework/boot/dependency/tools/Dependency;,6,6,100.0%,"private Dependency createDependency(Element element) throws Exception {
+		String groupId = getTextContent(element, ""groupId"");
+		String artifactId = getTextContent(element, ""artifactId"");
+		String version = getTextContent(element, ""version"");
+		List<Exclusion> exclusions = createExclusions(element
+				.getElementsByTagName(""exclusions""));
+		return new Dependency(groupId, artifactId, version, exclusions);
+	}",90-97,0
+org.springframework.boot.dependency.tools.PomDependencies,createExclusions,(Lorg/w3c/dom/Node;)Ljava/util/List;,7,7,100.0%,"private List<Exclusion> createExclusions(NodeList exclusion) {
+		if (exclusion == null || exclusion.getLength() == 0) {
+			return Collections.emptyList();
+		}
+		return createExclusions(exclusion.item(0));
+	}",99-104,0
+org.springframework.boot.dependency.tools.PomDependencies,createExclusions,(Lorg/w3c/dom/NodeList;)Ljava/util/List;,3,3,100.0%,"private List<Exclusion> createExclusions(NodeList exclusion) {
+		if (exclusion == null || exclusion.getLength() == 0) {
+			return Collections.emptyList();
+		}
+		return createExclusions(exclusion.item(0));
+	}",99-104,0
+org.springframework.boot.dependency.tools.PomDependencies,createExclusion,(Lorg/w3c/dom/Element;)Lorg/springframework/boot/dependency/tools/Dependency$Exclusion;,3,3,100.0%,"private Exclusion createExclusion(Element element) {
+		String groupId = getTextContent(element, ""groupId"");
+		String artifactId = getTextContent(element, ""artifactId"");
+		return new Exclusion(groupId, artifactId);
+	}",118-122,0
+org.springframework.boot.dependency.tools.ManagedDependenciesDelegate,getSpringBootDependencies,()Lorg/springframework/boot/dependency/tools/Dependencies;,3,3,100.0%,"private static Dependencies getSpringBootDependencies() {
+		if (springBootDependencies == null) {
+			springBootDependencies = new PomDependencies(getResource(""effective-pom.xml""));
+		}
+		return springBootDependencies;
+	}",58-63,0
+org.springframework.boot.dependency.tools.ManagedDependenciesDelegate,getResource,(Ljava/lang/String;)Ljava/io/InputStream;,4,4,100.0%,"private static InputStream getResource(String name) {
+		InputStream inputStream = ManagedDependenciesDelegate.class
+				.getResourceAsStream(name);
+		Assert.notNull(inputStream, ""Unable to load "" + name);
+		return inputStream;
+	}",65-70,0
+org.springframework.boot.cli.command.options.CompilerOptionHandler,options,()V,9,9,100.0%,"@Override
+	protected final void options() {
+		this.noGuessImportsOption = option(""no-guess-imports"",
+				""Do not attempt to guess imports"");
+		this.noGuessDependenciesOption = option(""no-guess-dependencies"",
+				""Do not attempt to guess dependencies"");
+		this.autoconfigureOption = option(""autoconfigure"",
+				""Add autoconfigure compiler transformations"").withOptionalArg()
+				.ofType(Boolean.class).defaultsTo(true);
+		this.classpathOption = option(asList(""classpath"", ""cp""),
+				""Additional classpath entries"").withRequiredArg();
+		doOptions();
+	}",40-52,0
+org.springframework.boot.cli.command.options.OptionHandler,getParser,()Ljoptsimple/OptionParser;,4,4,100.0%,"public OptionParser getParser() {
+		if (this.parser == null) {
+			this.parser = new OptionParser();
+			options();
+		}
+		return this.parser;
+	}",69-75,0
+org.springframework.boot.cli.command.options.OptionSetGroovyCompilerConfiguration,<init>,(Ljoptsimple/OptionSet;Lorg/springframework/boot/cli/command/options/CompilerOptionHandler;Ljava/util/List;)V,5,5,100.0%,"protected OptionSetGroovyCompilerConfiguration(OptionSet optionSet,
+			CompilerOptionHandler compilerOptionHandler) {
+		this(optionSet, compilerOptionHandler, RepositoryConfigurationFactory
+				.createDefaultRepositoryConfiguration());
+	}",43-47,0
+org.springframework.boot.cli.command.options.OptionSetGroovyCompilerConfiguration,isGuessDependencies,()Z,1,1,100.0%,"@Override
+	public boolean isGuessDependencies() {
+		return !this.options.has(this.optionHandler.getNoGuessDependenciesOption());
+	}",71-74,0
+org.springframework.boot.cli.command.options.OptionSetGroovyCompilerConfiguration,isAutoconfigure,()Z,1,1,100.0%,"@Override
+	public boolean isAutoconfigure() {
+		return this.optionHandler.getAutoconfigureOption().value(this.options);
+	}",76-79,0
+org.springframework.boot.cli.command.options.OptionSetGroovyCompilerConfiguration,getClasspath,()[Ljava/lang/String;,3,4,75.0%,"@Override
+	public String[] getClasspath() {
+		OptionSpec<String> classpathOption = this.optionHandler.getClasspathOption();
+		if (this.options.has(classpathOption)) {
+			return this.options.valueOf(classpathOption).split("":"");
+		}
+		return DEFAULT_CLASSPATH;
+	}",81-88,0
+org.springframework.boot.cli.command.options.OptionSetGroovyCompilerConfiguration,getRepositoryConfiguration,()Ljava/util/List;,1,1,100.0%,"@Override
+	public List<RepositoryConfiguration> getRepositoryConfiguration() {
+		return this.repositoryConfiguration;
+	}",90-93,0
+org.springframework.boot.cli.command.AbstractCommand,<init>,(Ljava/lang/String;Ljava/lang/String;)V,4,4,100.0%,"protected AbstractCommand(String name, String description) {
+		this.name = name;
+		this.description = description;
+	}",41-44,0
+org.springframework.boot.cli.command.OptionParsingCommand,<init>,(Ljava/lang/String;Ljava/lang/String;Lorg/springframework/boot/cli/command/options/OptionHandler;)V,3,3,100.0%,"protected OptionParsingCommand(String name, String description, OptionHandler handler) {
+		super(name, description);
+		this.handler = handler;
+	}",36-39,0
+org.springframework.boot.cli.compiler.GroovyBeansTransformation,visit,([Lorg/codehaus/groovy/ast/ASTNode;Lorg/codehaus/groovy/control/SourceUnit;)V,7,8,87.5%,"@Override
+	public void visit(ASTNode[] nodes, SourceUnit source) {
+		for (ASTNode node : nodes) {
+			if (node instanceof ModuleNode) {
+				ModuleNode module = (ModuleNode) node;
+				for (ClassNode classNode : new ArrayList<ClassNode>(module.getClasses())) {
+					if (classNode.isScript()) {
+						classNode.visitContents(new ClassVisitor(source, classNode));
+					}
+				}
+			}
+		}
+	}",47-59,0
+org.springframework.boot.cli.compiler.GroovyBeansTransformation,<init>,()V,1,1,100.0%,"public ClassVisitor(SourceUnit source, ClassNode classNode) {
+			this.source = source;
+			this.classNode = classNode;
+		}",69-72,0
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$DefaultScopeParentClassLoader,loadClass,(Ljava/lang/String;Z)Ljava/lang/Class;,2,2,100.0%,"@Override
+		protected Class<?> loadClass(String name, boolean resolve)
+				throws ClassNotFoundException {
+			this.groovyOnlyClassLoader.loadClass(name);
+			return super.loadClass(name, resolve);
+		}",235-240,0
+org.springframework.boot.cli.compiler.GroovyCompiler,createLoader,(Lorg/springframework/boot/cli/compiler/GroovyCompilerConfiguration;)Lorg/springframework/boot/cli/compiler/ExtendedGroovyClassLoader;,6,7,85.7%,"private ExtendedGroovyClassLoader createLoader(
+			GroovyCompilerConfiguration configuration) {
+
+		ExtendedGroovyClassLoader loader = new ExtendedGroovyClassLoader(
+				configuration.getScope());
+
+		for (URL url : getExistingUrls()) {
+			loader.addURL(url);
+		}
+
+		for (String classpath : configuration.getClasspath()) {
+			loader.addClasspath(classpath);
+		}
+
+		return loader;
+	}",135-150,0
+org.springframework.boot.cli.compiler.GroovyCompiler,addAstTransformations,(Lorg/codehaus/groovy/control/CompilationUnit;)V,3,3,100.0%,"@SuppressWarnings(""rawtypes"")
+	private void addAstTransformations(CompilationUnit compilationUnit) {
+		LinkedList[] phaseOperations = getPhaseOperations(compilationUnit);
+		processConversionOperations(phaseOperations[Phases.CONVERSION]);
+	}",217-221,0
+org.springframework.boot.cli.compiler.DependencyCustomizer$1,canAdd,()Z,6,6,100.0%,"@Override
+			protected boolean canAdd() {
+				for (String classname : classNames) {
+					try {
+						DependencyCustomizer.this.loader.loadClass(classname);
+					}
+					catch (Exception ex) {
+						return true;
+					}
+				}
+				return false;
+			}",91-102,0
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader,findClass,(Ljava/lang/String;)Ljava/lang/Class;,4,8,50.0%,"@Override
+	protected Class<?> findClass(String name) throws ClassNotFoundException {
+		try {
+			return super.findClass(name);
+		}
+		catch (ClassNotFoundException ex) {
+			if (this.scope == GroovyCompilerScope.DEFAULT
+					&& name.startsWith(SHARED_PACKAGE)) {
+				Class<?> sharedClass = findSharedClass(name);
+				if (sharedClass != null) {
+					return sharedClass;
+				}
+			}
+			throw ex;
+		}
+	}",81-96,0
+org.springframework.boot.cli.compiler.RepositoryConfigurationFactory,getM2HomeDirectory,()Ljava/io/File;,3,4,75.0%,"private static File getM2HomeDirectory() {
+		String mavenRoot = System.getProperty(""maven.home"");
+		if (StringUtils.hasLength(mavenRoot)) {
+			return new File(mavenRoot);
+		}
+		return new File(System.getProperty(""user.home""), "".m2"");
+	}",75-81,0
+org.springframework.boot.cli.compiler.AnnotatedNodeASTTransformation$ClassVisitor,visitAnnotations,(Lorg/codehaus/groovy/ast/AnnotatedNode;)V,2,2,100.0%,"@Override
+		public void visitAnnotations(AnnotatedNode node) {
+			visitAnnotatedNode(node);
+		}",119-122,0
+org.springframework.boot.cli.compiler.DependencyCustomizer,ifAnyMissingClasses,([Ljava/lang/String;)Lorg/springframework/boot/cli/compiler/DependencyCustomizer;,1,1,100.0%,"public DependencyCustomizer ifAnyMissingClasses(final String... classNames) {
+		return new DependencyCustomizer(this) {
+			@Override
+			protected boolean canAdd() {
+				for (String classname : classNames) {
+					try {
+						DependencyCustomizer.this.loader.loadClass(classname);
+					}
+					catch (Exception ex) {
+						return true;
+					}
+				}
+				return false;
+			}
+		};
+	}",89-104,0
+org.springframework.boot.cli.compiler.DependencyCustomizer,createGrabAnnotation,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Lorg/codehaus/groovy/ast/AnnotationNode;,9,11,81.8%,"private AnnotationNode createGrabAnnotation(String group, String module,
+			String version, String classifier, String type, boolean transitive) {
+		AnnotationNode annotationNode = new AnnotationNode(new ClassNode(Grab.class));
+		annotationNode.addMember(""group"", new ConstantExpression(group));
+		annotationNode.addMember(""module"", new ConstantExpression(module));
+		annotationNode.addMember(""version"", new ConstantExpression(version));
+		if (classifier != null) {
+			annotationNode.addMember(""classifier"", new ConstantExpression(classifier));
+		}
+		if (type != null) {
+			annotationNode.addMember(""type"", new ConstantExpression(type));
+		}
+		annotationNode.addMember(""transitive"", new ConstantExpression(transitive));
+		annotationNode.addMember(""initClass"", new ConstantExpression(false));
+		return annotationNode;
+	}",234-249,0
+org.springframework.boot.cli.compiler.GroovyCompiler$1,call,(Lorg/codehaus/groovy/control/SourceUnit;)V,5,5,100.0%,"@Override
+			public void call(SourceUnit source) throws CompilationFailedException {
+				ASTNode[] nodes = new ASTNode[] { source.getAST() };
+				for (ASTTransformation transformation : GroovyCompiler.this.transformations) {
+					transformation.visit(nodes, source);
+				}
+			}",241-247,0
+org.springframework.boot.cli.compiler.AstUtils,hasAtLeastOneAnnotation,(Lorg/codehaus/groovy/ast/AnnotatedNode;[Ljava/lang/String;)Z,7,7,100.0%,"public static boolean hasAtLeastOneAnnotation(ClassNode node, String... annotations) {
+		if (hasAtLeastOneAnnotation((AnnotatedNode) node, annotations)) {
+			return true;
+		}
+		for (MethodNode method : node.getMethods()) {
+			if (hasAtLeastOneAnnotation(method, annotations)) {
+				return true;
+			}
+		}
+		return false;
+	}",53-63,0
+org.springframework.boot.cli.compiler.AstUtils,hasAtLeastOneAnnotation,(Lorg/codehaus/groovy/ast/ClassNode;[Ljava/lang/String;)Z,6,7,85.7%,"public static boolean hasAtLeastOneAnnotation(ClassNode node, String... annotations) {
+		if (hasAtLeastOneAnnotation((AnnotatedNode) node, annotations)) {
+			return true;
+		}
+		for (MethodNode method : node.getMethods()) {
+			if (hasAtLeastOneAnnotation(method, annotations)) {
+				return true;
+			}
+		}
+		return false;
+	}",53-63,0
+org.springframework.boot.cli.compiler.ExtendedGroovyClassLoader$1,run,()Lgroovy/lang/GroovyClassLoader$InnerLoader;,1,1,100.0%,"@Override
+					public InnerLoader run() {
+						return new InnerLoader(ExtendedGroovyClassLoader.this) {
+							// Don't return URLs from the inner loader so that Tomcat only
+							// searches the parent. Fixes 'TLD skipped' issues
+							@Override
+							public URL[] getURLs() {
+								return NO_URLS;
+							}
+						};
+					}",131-141,0
+org.springframework.boot.cli.compiler.GrabMetadataTransformation,<init>,(Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;)V,3,3,100.0%,"public GrabMetadataTransformation(DependencyResolutionContext resolutionContext) {
+		super(GRAB_METADATA_ANNOTATION_NAMES);
+		this.resolutionContext = resolutionContext;
+	}",66-69,0
+org.springframework.boot.cli.compiler.DependencyAutoConfigurationTransformation,<init>,(Lgroovy/lang/GroovyClassLoader;Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;Ljava/lang/Iterable;)V,5,5,100.0%,"public DependencyAutoConfigurationTransformation(GroovyClassLoader loader,
+			DependencyResolutionContext dependencyResolutionContext,
+			Iterable<CompilerAutoConfiguration> compilerAutoConfigurations) {
+		this.loader = loader;
+		this.dependencyResolutionContext = dependencyResolutionContext;
+		this.compilerAutoConfigurations = compilerAutoConfigurations;
+
+	}",49-56,0
+org.springframework.boot.cli.compiler.DependencyAutoConfigurationTransformation,visit,([Lorg/codehaus/groovy/ast/ASTNode;Lorg/codehaus/groovy/control/SourceUnit;)V,4,4,100.0%,"@Override
+	public void visit(ASTNode[] nodes, SourceUnit source) {
+		for (ASTNode astNode : nodes) {
+			if (astNode instanceof ModuleNode) {
+				visitModule((ModuleNode) astNode);
+			}
+		}
+	}",58-65,0
+org.springframework.boot.cli.compiler.DependencyAutoConfigurationTransformation,visitModule,(Lorg/codehaus/groovy/ast/ModuleNode;)V,8,8,100.0%,"private void visitModule(ModuleNode module) {
+		DependencyCustomizer dependencies = new DependencyCustomizer(this.loader, module,
+				this.dependencyResolutionContext);
+		for (ClassNode classNode : module.getClasses()) {
+			for (CompilerAutoConfiguration autoConfiguration : this.compilerAutoConfigurations) {
+				if (autoConfiguration.matches(classNode)) {
+					autoConfiguration.applyDependencies(dependencies);
+				}
+			}
+		}
+	}",67-77,0
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,<init>,(Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;)V,3,3,100.0%,"public ResolveDependencyCoordinatesTransformation(
+			DependencyResolutionContext resolutionContext) {
+		super(GRAB_ANNOTATION_NAMES);
+		this.resolutionContext = resolutionContext;
+	}",52-56,0
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,processAnnotationNodes,(Ljava/util/List;)V,4,4,100.0%,"@Override
+	protected void processAnnotationNodes(List<AnnotationNode> annotationNodes) {
+		for (AnnotationNode annotationNode : annotationNodes) {
+			transformGrabAnnotation(annotationNode);
+		}
+	}",58-63,0
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,transformGrabAnnotation,(Lorg/codehaus/groovy/ast/AnnotationNode;)V,5,5,100.0%,"private void transformGrabAnnotation(AnnotationNode grabAnnotation) {
+		grabAnnotation.setMember(""initClass"", new ConstantExpression(false));
+		String value = getValue(grabAnnotation);
+		if (value != null && !isConvenienceForm(value)) {
+			applyGroupAndVersion(grabAnnotation, value);
+		}
+	}",65-71,0
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,getValue,(Lorg/codehaus/groovy/ast/AnnotationNode;)Ljava/lang/String;,5,5,100.0%,"private String getValue(AnnotationNode annotation) {
+		Expression expression = annotation.getMember(""value"");
+		if (expression instanceof ConstantExpression) {
+			Object value = ((ConstantExpression) expression).getValue();
+			return (value instanceof String ? (String) value : null);
+		}
+		return null;
+	}",73-80,0
+org.springframework.boot.cli.compiler.ResolveDependencyCoordinatesTransformation,setMember,(Lorg/codehaus/groovy/ast/AnnotationNode;Ljava/lang/String;Ljava/lang/String;)V,3,3,100.0%,"private void setMember(AnnotationNode annotation, String name, String value) {
+		ConstantExpression expression = new ConstantExpression(value);
+		annotation.setMember(name, expression);
+	}",104-107,0
+org.springframework.boot.cli.compiler.grape.DefaultRepositorySystemSessionAutoConfiguration,apply,(Lorg/eclipse/aether/DefaultRepositorySystemSession;Lorg/eclipse/aether/RepositorySystem;)V,12,12,100.0%,"@Override
+	public void apply(DefaultRepositorySystemSession session,
+			RepositorySystem repositorySystem) {
+
+		if (session.getLocalRepositoryManager() == null) {
+			LocalRepository localRepository = new LocalRepository(getM2RepoDirectory());
+			LocalRepositoryManager localRepositoryManager = repositorySystem
+					.newLocalRepositoryManager(session, localRepository);
+			session.setLocalRepositoryManager(localRepositoryManager);
+		}
+
+		ProxySelector existing = session.getProxySelector();
+		if (existing == null || !(existing instanceof CompositeProxySelector)) {
+			JreProxySelector fallback = new JreProxySelector();
+			ProxySelector selector = existing == null ? fallback
+					: new CompositeProxySelector(Arrays.asList(existing, fallback));
+			session.setProxySelector(selector);
+		}
+	}",39-57,0
+org.springframework.boot.cli.compiler.grape.DefaultRepositorySystemSessionAutoConfiguration,getM2HomeDirectory,()Ljava/io/File;,3,4,75.0%,"private File getM2HomeDirectory() {
+		String grapeRoot = System.getProperty(""grape.root"");
+		if (StringUtils.hasLength(grapeRoot)) {
+			return new File(grapeRoot);
+		}
+		return getDefaultM2HomeDirectory();
+	}",63-69,0
+org.springframework.boot.cli.compiler.grape.DefaultRepositorySystemSessionAutoConfiguration,getDefaultM2HomeDirectory,()Ljava/io/File;,3,4,75.0%,"private File getDefaultM2HomeDirectory() {
+		String mavenRoot = System.getProperty(""maven.home"");
+		if (StringUtils.hasLength(mavenRoot)) {
+			return new File(mavenRoot);
+		}
+		return new File(System.getProperty(""user.home""), "".m2"");
+	}",71-77,0
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter$2,<init>,(Lorg/springframework/boot/cli/compiler/grape/SummaryProgressReporter;)V,1,1,100.0%,"public SummaryProgressReporter(DefaultRepositorySystemSession session, PrintStream out) {
+		this.out = out;
+
+		session.setTransferListener(new AbstractTransferListener() {
+			@Override
+			public void transferStarted(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+
+			@Override
+			public void transferProgressed(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+		});
+
+		session.setRepositoryListener(new AbstractRepositoryListener() {
+			@Override
+			public void artifactResolved(RepositoryEvent event) {
+				reportProgress();
+			}
+		});
+	}",51-74,0
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter$2,artifactResolved,(Lorg/eclipse/aether/RepositoryEvent;)V,2,2,100.0%,"@Override
+			public void artifactResolved(RepositoryEvent event) {
+				reportProgress();
+			}",69-72,0
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter$1,<init>,(Lorg/springframework/boot/cli/compiler/grape/SummaryProgressReporter;)V,1,1,100.0%,"public SummaryProgressReporter(DefaultRepositorySystemSession session, PrintStream out) {
+		this.out = out;
+
+		session.setTransferListener(new AbstractTransferListener() {
+			@Override
+			public void transferStarted(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+
+			@Override
+			public void transferProgressed(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+		});
+
+		session.setRepositoryListener(new AbstractRepositoryListener() {
+			@Override
+			public void artifactResolved(RepositoryEvent event) {
+				reportProgress();
+			}
+		});
+	}",51-74,0
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,loadSettings,()Lorg/apache/maven/settings/Settings;,5,7,71.4%,"private Settings loadSettings() {
+		File settingsFile = new File(this.homeDir, "".m2/settings.xml"");
+		SettingsBuildingRequest request = new DefaultSettingsBuildingRequest();
+		request.setUserSettingsFile(settingsFile);
+		try {
+			return new DefaultSettingsBuilderFactory().newInstance().build(request)
+					.getEffectiveSettings();
+		}
+		catch (SettingsBuildingException ex) {
+			throw new IllegalStateException(""Failed to build settings from ""
+					+ settingsFile, ex);
+		}
+	}",95-107,0
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,decryptSettings,(Lorg/apache/maven/settings/Settings;)Lorg/apache/maven/settings/crypto/SettingsDecryptionResult;,2,2,100.0%,"private SettingsDecryptionResult decryptSettings(Settings settings) {
+		DefaultSettingsDecryptionRequest request = new DefaultSettingsDecryptionRequest(
+				settings);
+
+		return createSettingsDecrypter().decrypt(request);
+	}",109-114,0
+org.springframework.boot.cli.compiler.grape.SettingsXmlRepositorySystemSessionAutoConfiguration,createSettingsDecrypter,()Lorg/apache/maven/settings/crypto/SettingsDecrypter;,3,3,100.0%,"private SettingsDecrypter createSettingsDecrypter() {
+		SettingsDecrypter settingsDecrypter = new DefaultSettingsDecrypter();
+		setField(DefaultSettingsDecrypter.class, ""securityDispatcher"", settingsDecrypter,
+				new SpringBootSecDispatcher());
+		return settingsDecrypter;
+	}",116-121,0
+org.springframework.boot.cli.compiler.grape.CompositeProxySelector,getProxy,(Lorg/eclipse/aether/repository/RemoteRepository;)Lorg/eclipse/aether/repository/Proxy;,5,6,83.3%,"@Override
+	public Proxy getProxy(RemoteRepository repository) {
+		for (ProxySelector selector : this.selectors) {
+			Proxy proxy = selector.getProxy(repository);
+			if (proxy != null) {
+				return proxy;
+			}
+		}
+		return null;
+	}",40-49,0
+org.springframework.boot.cli.compiler.grape.ManagedDependenciesFactory,asArtifact,(Lorg/springframework/boot/dependency/tools/Dependency;)Lorg/eclipse/aether/artifact/Artifact;,2,2,100.0%,"private Artifact asArtifact(
+			org.springframework.boot.dependency.tools.Dependency dependency) {
+		return new DefaultArtifact(dependency.getGroupId(), dependency.getArtifactId(),
+				""jar"", dependency.getVersion());
+	}",58-62,0
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter,<init>,(Lorg/eclipse/aether/DefaultRepositorySystemSession;Ljava/io/PrintStream;)V,7,7,100.0%,"public SummaryProgressReporter(DefaultRepositorySystemSession session, PrintStream out) {
+		this.out = out;
+
+		session.setTransferListener(new AbstractTransferListener() {
+			@Override
+			public void transferStarted(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+
+			@Override
+			public void transferProgressed(TransferEvent event)
+					throws TransferCancelledException {
+				reportProgress();
+			}
+		});
+
+		session.setRepositoryListener(new AbstractRepositoryListener() {
+			@Override
+			public void artifactResolved(RepositoryEvent event) {
+				reportProgress();
+			}
+		});
+	}",51-74,0
+org.springframework.boot.cli.compiler.grape.SummaryProgressReporter,finished,()V,2,4,50.0%,"@Override
+	public void finished() {
+		if (this.started && !this.finished) {
+			this.finished = true;
+			System.out.println("""");
+		}
+	}",90-96,0
+org.springframework.boot.cli.compiler.grape.RepositoryConfiguration,<init>,(Ljava/lang/String;Ljava/net/URI;Z)V,5,5,100.0%,"public RepositoryConfiguration(String name, URI uri, boolean snapshotsEnabled) {
+		this.name = name;
+		this.uri = uri;
+		this.snapshotsEnabled = snapshotsEnabled;
+	}",43-47,0
+org.springframework.boot.cli.compiler.grape.RepositoryConfiguration,equals,(Ljava/lang/Object;)Z,5,8,62.5%,"@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null) {
+			return false;
+		}
+		if (getClass() != obj.getClass()) {
+			return false;
+		}
+		RepositoryConfiguration other = (RepositoryConfiguration) obj;
+		return ObjectUtils.nullSafeEquals(this.name, other.name);
+	}",82-95,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngineFactory,createServiceLocator,()Lorg/eclipse/aether/spi/locator/ServiceLocator;,6,6,100.0%,"private static ServiceLocator createServiceLocator() {
+		DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
+		locator.addService(RepositorySystem.class, DefaultRepositorySystem.class);
+		locator.addService(RepositoryConnectorFactory.class,
+				BasicRepositoryConnectorFactory.class);
+		locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
+		locator.addService(TransporterFactory.class, FileTransporterFactory.class);
+		return locator;
+	}",71-79,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,<init>,(Lgroovy/lang/GroovyClassLoader;Lorg/eclipse/aether/RepositorySystem;Lorg/eclipse/aether/DefaultRepositorySystemSession;Ljava/util/List;Lorg/springframework/boot/cli/compiler/grape/DependencyResolutionContext;)V,13,13,100.0%,"public AetherGrapeEngine(GroovyClassLoader classLoader,
+			RepositorySystem repositorySystem,
+			DefaultRepositorySystemSession repositorySystemSession,
+			List<RemoteRepository> remoteRepositories,
+			DependencyResolutionContext resolutionContext) {
+		this.classLoader = classLoader;
+		this.repositorySystem = repositorySystem;
+		this.session = repositorySystemSession;
+		this.resolutionContext = resolutionContext;
+
+		this.repositories = new ArrayList<RemoteRepository>();
+		List<RemoteRepository> remotes = new ArrayList<RemoteRepository>(
+				remoteRepositories);
+		Collections.reverse(remotes); // priority is reversed in addRepository
+		for (RemoteRepository repository : remotes) {
+			addRepository(repository);
+		}
+
+		this.progressReporter = getProgressReporter(this.session);
+	}",73-92,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,getProgressReporter,(Lorg/eclipse/aether/DefaultRepositorySystemSession;)Lorg/springframework/boot/cli/compiler/grape/ProgressReporter;,2,3,66.7%,"private ProgressReporter getProgressReporter(DefaultRepositorySystemSession session) {
+		if (Boolean.getBoolean(""groovy.grape.report.downloads"")) {
+			return new DetailedProgressReporter(session, System.out);
+		}
+		else {
+			return new SummaryProgressReporter(session, System.out);
+		}
+	}",94-101,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,grab,(Ljava/util/Map;[Ljava/util/Map;)Ljava/lang/Object;,2,13,15.4%,"@Override
+	public Object grab(Map args) {
+		return grab(args, args);
+	}",103-106,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,createDependency,(Ljava/util/Map;Ljava/util/List;)Lorg/eclipse/aether/graph/Dependency;,3,4,75.0%,"private Dependency createDependency(Map<?, ?> dependencyMap,
+			List<Exclusion> exclusions) {
+		Artifact artifact = createArtifact(dependencyMap);
+		if (isTransitive(dependencyMap)) {
+			return new Dependency(artifact, JavaScopes.COMPILE, false, exclusions);
+		}
+		else {
+			return new Dependency(artifact, JavaScopes.COMPILE, null, WILDCARD_EXCLUSION);
+		}
+	}",158-167,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,getPossibleMirror,(Lorg/eclipse/aether/repository/RemoteRepository;)Lorg/eclipse/aether/repository/RemoteRepository;,3,4,75.0%,"private RemoteRepository getPossibleMirror(RemoteRepository remoteRepository) {
+		RemoteRepository mirror = this.session.getMirrorSelector().getMirror(
+				remoteRepository);
+		if (mirror != null) {
+			return mirror;
+		}
+
+		return remoteRepository;
+	}",274-282,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,applyProxy,(Lorg/eclipse/aether/repository/RemoteRepository;)Lorg/eclipse/aether/repository/RemoteRepository;,5,5,100.0%,"private RemoteRepository applyProxy(RemoteRepository repository) {
+		if (repository.getProxy() == null) {
+			RemoteRepository.Builder builder = new RemoteRepository.Builder(repository);
+			builder.setProxy(this.session.getProxySelector().getProxy(repository));
+			repository = builder.build();
+		}
+		return repository;
+	}",284-291,0
+org.springframework.boot.cli.compiler.grape.AetherGrapeEngine,applyAuthentication,(Lorg/eclipse/aether/repository/RemoteRepository;)Lorg/eclipse/aether/repository/RemoteRepository;,6,6,100.0%,"private RemoteRepository applyAuthentication(RemoteRepository repository) {
+		if (repository.getAuthentication() == null) {
+			RemoteRepository.Builder builder = new RemoteRepository.Builder(repository);
+			builder.setAuthentication(this.session.getAuthenticationSelector()
+					.getAuthentication(repository));
+			repository = builder.build();
+		}
+		return repository;
+	}",293-301,0
+org.springframework.boot.cli.command.run.RunCommand$RunOptionHandler$SpringApplicationRunnerConfigurationAdapter,getScope,()Lorg/springframework/boot/cli/compiler/GroovyCompilerScope;,1,1,100.0%,"@Override
+			public GroovyCompilerScope getScope() {
+				return GroovyCompilerScope.DEFAULT;
+			}",127-130,0
+org.springframework.boot.cli.command.run.RunCommand$RunOptionHandler$SpringApplicationRunnerConfigurationAdapter,getLogLevel,()Ljava/util/logging/Level;,3,5,60.0%,"@Override
+			public Level getLogLevel() {
+				if (getOptions().has(RunOptionHandler.this.quietOption)) {
+					return Level.OFF;
+				}
+				if (getOptions().has(RunOptionHandler.this.verboseOption)) {
+					return Level.FINEST;
+				}
+				return Level.INFO;
+			}",137-146,0
+org.springframework.boot.cli.command.run.RunCommand$RunOptionHandler,doOptions,()V,4,4,100.0%,"@Override
+		protected void doOptions() {
+			this.watchOption = option(""watch"", ""Watch the specified file for changes"");
+			this.verboseOption = option(asList(""verbose"", ""v""),
+					""Verbose logging of dependency resolution"");
+			this.quietOption = option(asList(""quiet"", ""q""), ""Quiet logging"");
+		}",73-79,0
+org.springframework.boot.cli.compiler.dependencies.ManagedDependenciesArtifactCoordinatesResolver,getGroupId,(Ljava/lang/String;)Ljava/lang/String;,2,2,100.0%,"@Override
+	public String getGroupId(String artifactId) {
+		Dependency dependency = find(artifactId);
+		return (dependency == null ? null : dependency.getGroupId());
+	}",42-46,0
+org.springframework.boot.cli.compiler.dependencies.ManagedDependenciesArtifactCoordinatesResolver,getVersion,(Ljava/lang/String;)Ljava/lang/String;,2,2,100.0%,"@Override
+	public String getVersion(String artifactId) {
+		Dependency dependency = find(artifactId);
+		return (dependency == null ? null : dependency.getVersion());
+	}",48-52,0
+org.springframework.boot.cli.compiler.dependencies.ManagedDependenciesArtifactCoordinatesResolver,getArtifactId,(Ljava/lang/String;)Ljava/lang/String;,2,2,100.0%,"@Override
+	public String getArtifactId(String artifactId) {
+		Dependency dependency = find(artifactId);
+		return (dependency == null ? null : dependency.getArtifactId());
+	}",54-58,0
+org.springframework.boot.cli.compiler.dependencies.ManagedDependenciesArtifactCoordinatesResolver,find,(Ljava/lang/String;)Lorg/springframework/boot/dependency/tools/Dependency;,6,9,66.7%,"private Dependency find(String artifactId) {
+		if (StringUtils.countOccurrencesOf(artifactId, "":"") == 2) {
+			String[] tokens = artifactId.split("":"");
+			return new Dependency(tokens[0], tokens[1], tokens[2]);
+		}
+		if (artifactId != null) {
+			if (artifactId.startsWith(""spring-boot"")) {
+				return new Dependency(""org.springframework.boot"", artifactId,
+						this.dependencies.getSpringBootVersion());
+			}
+			return this.dependencies.find(artifactId);
+		}
+		return null;
+	}",60-73,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringMobileCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableDeviceResolver"");
+	}",35-38,0
+org.springframework.boot.cli.compiler.autoconfigure.ReactorCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,2,2,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableReactor"")
+				|| AstUtils.hasAtLeastOneFieldOrMethod(classNode, ""Reactor"");
+	}",32-36,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringSecurityCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableWebSecurity"");
+	}",32-35,0
+org.springframework.boot.cli.compiler.autoconfigure.CachingCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableCaching"");
+	}",34-37,0
+org.springframework.boot.cli.compiler.autoconfigure.SpockCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.subclasses(classNode, ""Specification"");
+	}",33-36,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringSocialFacebookCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneFieldOrMethod(classNode, ""Facebook"");
+	}",35-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringTestCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode,
+				""SpringApplicationConfiguration"");
+	}",42-46,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringSocialTwitterCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneFieldOrMethod(classNode, ""Twitter"");
+	}",35-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringSocialLinkedInCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneFieldOrMethod(classNode, ""LinkedIn"");
+	}",35-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringIntegrationCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,2,2,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableIntegration"")
+				|| AstUtils.hasAtLeastOneAnnotation(classNode, ""MessageEndpoint"");
+	}",33-37,0
+org.springframework.boot.cli.compiler.autoconfigure.JdbcCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneFieldOrMethod(classNode, ""JdbcTemplate"",
+				""NamedParameterJdbcTemplate"", ""DataSource"");
+	}",32-36,0
+org.springframework.boot.cli.compiler.autoconfigure.JmsCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,2,2,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableJms"")
+				|| AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableJmsMessaging"");
+	}",34-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringMvcCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""Controller"",
+				""RestController"", ""EnableWebMvc"");
+	}",34-38,0
+org.springframework.boot.cli.compiler.autoconfigure.TransactionManagementCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableTransactionManagement"");
+	}",34-37,0
+org.springframework.boot.cli.compiler.autoconfigure.JUnitCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""Test"");
+	}",33-36,0
+org.springframework.boot.cli.compiler.autoconfigure.GroovyTemplatesCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableGroovyTemplates"");
+	}",35-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringWebsocketCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableWebSocket"",
+				""EnableWebSocketMessageBroker"");
+	}",32-36,0
+org.springframework.boot.cli.compiler.autoconfigure.RabbitCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,2,2,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableRabbit"")
+				|| AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableRabbitMessaging"");
+	}",34-38,0
+org.springframework.boot.cli.compiler.autoconfigure.SpringBatchCompilerAutoConfiguration,matches,(Lorg/codehaus/groovy/ast/ClassNode;)Z,1,1,100.0%,"@Override
+	public boolean matches(ClassNode classNode) {
+		return AstUtils.hasAtLeastOneAnnotation(classNode, ""EnableBatchProcessing"");
+	}",33-36,0

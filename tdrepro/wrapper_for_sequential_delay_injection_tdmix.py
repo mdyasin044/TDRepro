@@ -17,7 +17,7 @@ import re
 import time
 import sys
 import pandas as pd
-from td_mix import td_mix_rank
+from td_mix import td_mix_rank, timing_only_rank
 #from generating_reproducing_config import log_similarity_check
 from utils import find_class_file, log_similarity_check
 
@@ -110,6 +110,8 @@ def load_ranked_methods(csv_file):
     df = pd.read_csv(csv_file, dtype=str, keep_default_na=False)
     if RANKER == "td-mix":
         df = td_mix_rank(df)
+    elif RANKER == "timing":          # timing prior only, no GPT-2 list
+        df = timing_only_rank(df)
     return df.to_dict("records")
 
 def already_done(path):

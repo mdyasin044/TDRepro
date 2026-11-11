@@ -51,3 +51,13 @@ def td_mix_rank(ranked_df: pd.DataFrame) -> pd.DataFrame:
     out = df.iloc[mixed].reset_index(drop=True)
     out["timing_score"] = [scores[i] for i in mixed]
     return out
+
+
+def timing_only_rank(df: pd.DataFrame) -> pd.DataFrame:
+    """No GPT-2 list: order purely by the timing prior (highest first, ties keep the input order)."""
+    df = df.reset_index(drop=True)
+    scores = [timing_score(b) for b in df["Body"]]
+    order = sorted(range(len(df)), key=lambda i: (-scores[i], i))
+    out = df.iloc[order].reset_index(drop=True)
+    out["timing_score"] = [scores[i] for i in order]
+    return out
