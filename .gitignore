@@ -7,7 +7,6 @@ __pycache__/
 tdrepro/metadata/
 *:Zone.Identifier
 *Zone.Identifier
-tdrepro/FlakeSync/
 tdrepro/conc_executed_methods/
 tdrepro/results/sequential_delay_injection_timing_top10.csv
 tdrepro/run_ui.log
