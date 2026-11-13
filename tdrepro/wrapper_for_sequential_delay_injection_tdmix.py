@@ -1,7 +1,7 @@
 # TD-Mix version of the sequential (all-lines) delay-injection baseline.
 #   python3 wrapper_for_sequential_delay_injection_tdmix.py ../data/failed_tests_input.csv
 # Environment variables:
-#   TDREPRO_RANKER=td-mix|gpt2   ranker applied to the cached GPT-2 list (default td-mix)
+#   TDREPRO_RANKER=td-mix|gpt2|timing|timing-prior   ranker applied to the cached GPT-2 list (default td-mix)
 #   TOP_K=10                     how many ranked methods to try per test (default 10)
 #   DRY_RUN=1                    only print the methods that would be tried, run nothing
 # Results go to results/sequential_delay_injection_<ranker>_top<K>.csv (the authors' file is never touched).
@@ -108,6 +108,8 @@ output_csv = f"results/sequential_delay_injection_{RANKER.replace('-', '')}_top{
 def load_ranked_methods(csv_file):
     """Authors' cached GPT-2 list (best first); re-ordered by TD-Mix when RANKER == 'td-mix'. Returns list of dict rows."""
     df = pd.read_csv(csv_file, dtype=str, keep_default_na=False)
+    if RANKER == "timing-prior":      # file already sorted by the timing prior (timing-prior/ranked/*.csv): use as is
+        return df.to_dict("records")
     if RANKER == "td-mix":
         df = td_mix_rank(df)
     elif RANKER == "timing":          # timing prior only, no GPT-2 list
@@ -216,6 +218,8 @@ with open(input_csv, newline='') as inf:
         seen_methods = set()
         test_with_dot = test.replace("#", ".")
         csv_file = "metadata/embedings/" + test_with_dot +"_"+model_name+ "_embeddings.csv"
+        if RANKER == "timing-prior":
+            csv_file = "timing-prior/ranked/" + test_with_dot + ".csv"
         failure_detected = 0 
         # Open and read the CSV data
         with open(csv_file, newline='') as f:  #ranked_method_list (kept only to preserve the block structure)

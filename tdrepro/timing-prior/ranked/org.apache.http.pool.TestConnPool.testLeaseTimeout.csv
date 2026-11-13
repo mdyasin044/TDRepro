@@ -1,0 +1,167 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,22,22,0,org.apache.http.pool.AbstractConnPool,getPoolEntryBlocking,(Ljava/lang/Object;Ljava/lang/Object;JLjava/util/concurrent/TimeUnit;Lorg/apache/http/pool/PoolEntryFuture;)Lorg/apache/http/pool/PoolEntry;,41,58,70.7%,"private E getPoolEntryBlocking(
+            final T route, final Object state,
+            final long timeout, final TimeUnit tunit,
+            final PoolEntryFuture<E> future)
+                throws IOException, InterruptedException, TimeoutException {
+
+        Date deadline = null;
+        if (timeout > 0) {
+            deadline = new Date
+                (System.currentTimeMillis() + tunit.toMillis(timeout));
+        }
+
+        this.lock.lock();
+        try {
+            RouteSpecificPool<T, C, E> pool = getPool(route);
+            E entry = null;
+            while (entry == null) {
+                if (this.isShutDown) {
+                    throw new IllegalStateException(""Connection pool shut down"");
+                }
+                for (;;) {
+                    entry = pool.getFree(state);
+                    if (entry == null) {
+                        break;
+                    }
+                    if (entry.isExpired(System.currentTimeMillis())) {
+                        closeEntry(entry);
+                        this.available.remove(entry);
+                        pool.free(entry, false);
+                    } else {
+                        break;
+                    }
+                }
+                if (entry != null) {
+                    this.available.remove(entry);
+                    this.leased.add(entry);
+                    return entry;
+                }
+
+                // New connection is needed
+                int maxPerRoute = getMaxPerRoute(route);
+                // Shrink the pool prior to allocating a new connection
+                int excess = Math.max(0, pool.getAllocatedCount() + 1 - maxPerRoute);
+                if (excess > 0) {
+                    for (int i = 0; i < excess; i++) {
+                        E lastUsed = pool.getLastUsed();
+                        if (lastUsed == null) {
+                            break;
+                        }
+                        closeEntry(lastUsed);
+                        this.available.remove(lastUsed);
+                        pool.remove(lastUsed);
+                    }
+                }
+
+                if (pool.getAllocatedCount() < maxPerRoute) {
+                    int totalUsed = this.leased.size();
+                    int freeCapacity = Math.max(this.maxTotal - totalUsed, 0);
+                    if (freeCapacity > 0) {
+                        int totalAvailable = this.available.size();
+                        if (totalAvailable > freeCapacity - 1) {
+                            if (!this.available.isEmpty()) {
+                                E lastUsed = this.available.removeFirst();
+                                closeEntry(lastUsed);
+                                RouteSpecificPool<T, C, E> otherpool = getPool(lastUsed.getRoute());
+                                otherpool.remove(lastUsed);
+                            }
+                        }
+                        C conn = createConnection(route);
+                        entry = pool.add(conn);
+                        this.leased.add(entry);
+                        return entry;
+                    }
+                }
+
+                boolean success = false;
+                try {
+                    pool.queue(future);
+                    this.pending.add(future);
+                    success = future.await(deadline);
+                } finally {
+                    // In case of 'success', we were woken up by the
+                    // connection pool and should now have a connection
+                    // waiting for us, or else we're shutting down.
+                    // Just continue in the loop, both cases are checked.
+                    pool.unqueue(future);
+                    this.pending.remove(future);
+                }
+                // check for spurious wakeup vs. timeout
+                if (!success && (deadline != null) &&
+                    (deadline.getTime() <= System.currentTimeMillis())) {
+                    break;
+                }
+            }
+            throw new TimeoutException(""Timeout waiting for connection"");
+        } finally {
+            this.lock.unlock();
+        }
+    }",163-261,0.9951929,0.9321613,0.9321613
+2,2,,4,4,0,org.apache.http.pool.PoolEntryFuture,await,(Ljava/util/Date;)Z,8,12,66.7%,"public boolean await(final Date deadline) throws InterruptedException {
+        this.lock.lock();
+        try {
+            if (this.cancelled) {
+                throw new InterruptedException(""Operation interrupted"");
+            }
+            boolean success = false;
+            if (deadline != null) {
+                success = this.condition.awaitUntil(deadline);
+            } else {
+                this.condition.await();
+                success = true;
+            }
+            if (this.cancelled) {
+                throw new InterruptedException(""Operation interrupted"");
+            }
+            return success;
+        } finally {
+            this.lock.unlock();
+        }
+
+    }",109-130,0.9857658,0.8773446,0.8773446
+3,3,,2,2,0,org.apache.http.pool.AbstractConnPool,getPool,(Ljava/lang/Object;)Lorg/apache/http/pool/RouteSpecificPool;,5,5,100.0%,"private RouteSpecificPool<T, C, E> getPool(final T route) {
+        RouteSpecificPool<T, C, E> pool = this.routeToPool.get(route);
+        if (pool == null) {
+            pool = new RouteSpecificPool<T, C, E>(route) {
+
+                @Override
+                protected E createEntry(C conn) {
+                    return AbstractConnPool.this.createEntry(route, conn);
+                }
+
+                @Override
+                protected void closeEntry(final E entry) {
+                    AbstractConnPool.this.closeEntry(entry);
+                }
+
+            };
+            this.routeToPool.put(route, pool);
+        }
+        return pool;
+    }",122-141,0.99627995,0.9278424,0.9278424
+4,4,,2,2,0,org.apache.http.pool.AbstractConnPool,getMaxPerRoute,(Ljava/lang/Object;)I,3,4,75.0%,"private int getMaxPerRoute(final T route) {
+        Integer v = this.maxPerRoute.get(route);
+        if (v != null) {
+            return v.intValue();
+        } else {
+            return this.defaultMaxPerRoute;
+        }
+    }",293-300,0.9888661,0.9675153,0.9675153
+5,5,,1,1,0,org.apache.http.pool.PoolEntryFuture,get,(JLjava/util/concurrent/TimeUnit;)Ljava/lang/Object;,6,11,54.5%,"public T get() throws InterruptedException, ExecutionException {
+        try {
+            return get(0, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            throw new ExecutionException(ex);
+        }
+    }",78-84,0.9805675,0.9813637,0.9813637
+6,6,,0,0,0,org.apache.http.pool.AbstractConnPool$2,getPoolEntry,(JLjava/util/concurrent/TimeUnit;)Lorg/apache/http/pool/PoolEntry;,1,1,100.0%,"@Override
+            public E getPoolEntry(
+                    long timeout,
+                    TimeUnit tunit)
+                        throws InterruptedException, TimeoutException, IOException {
+                return getPoolEntryBlocking(route, state, timeout, tunit, this);
+            }",152-158,0.9885548,0.9705933,0.9705933
+7,7,,0,0,0,org.apache.http.pool.PoolEntryFuture,isDone,()Z,1,1,100.0%,"public boolean isDone() {
+        return this.completed;
+    }",74-76,0.78145415,0.9030975,0.9030975

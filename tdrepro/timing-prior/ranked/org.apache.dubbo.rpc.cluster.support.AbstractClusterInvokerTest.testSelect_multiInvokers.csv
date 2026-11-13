@@ -1,0 +1,885 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,18,18,0,org.apache.dubbo.common.extension.ExtensionLoader,loadClass,(Ljava/util/Map;Ljava/net/URL;Ljava/lang/Class;Ljava/lang/String;)V,20,40,50.0%,"private void loadClass(Map<String, Class<?>> extensionClasses, java.net.URL resourceURL, Class<?> clazz, String name) throws NoSuchMethodException {
+        if (!type.isAssignableFrom(clazz)) {
+            throw new IllegalStateException(""Error when load extension class(interface: "" +
+                    type + "", class line: "" + clazz.getName() + ""), class ""
+                    + clazz.getName() + ""is not subtype of interface."");
+        }
+        if (clazz.isAnnotationPresent(Adaptive.class)) {
+            if (cachedAdaptiveClass == null) {
+                cachedAdaptiveClass = clazz;
+            } else if (!cachedAdaptiveClass.equals(clazz)) {
+                throw new IllegalStateException(""More than 1 adaptive class found: ""
+                        + cachedAdaptiveClass.getClass().getName()
+                        + "", "" + clazz.getClass().getName());
+            }
+        } else if (isWrapperClass(clazz)) {
+            Set<Class<?>> wrappers = cachedWrapperClasses;
+            if (wrappers == null) {
+                cachedWrapperClasses = new ConcurrentHashSet<Class<?>>();
+                wrappers = cachedWrapperClasses;
+            }
+            wrappers.add(clazz);
+        } else {
+            clazz.getConstructor();
+            if (name == null || name.length() == 0) {
+                name = findAnnotationName(clazz);
+                if (name.length() == 0) {
+                    throw new IllegalStateException(""No such extension name for the class "" + clazz.getName() + "" in the config "" + resourceURL);
+                }
+            }
+            String[] names = NAME_SEPARATOR.split(name);
+            if (names != null && names.length > 0) {
+                Activate activate = clazz.getAnnotation(Activate.class);
+                if (activate != null) {
+                    cachedActivates.put(names[0], activate);
+                } else {
+                    // support com.alibaba.dubbo.common.extension.Activate
+                    com.alibaba.dubbo.common.extension.Activate oldActivate = clazz.getAnnotation(com.alibaba.dubbo.common.extension.Activate.class);
+                    if (oldActivate != null) {
+                        cachedActivates.put(names[0], oldActivate);
+                    }
+                }
+                for (String n : names) {
+                    if (!cachedNames.containsKey(clazz)) {
+                        cachedNames.put(clazz, n);
+                    }
+                    Class<?> c = extensionClasses.get(n);
+                    if (c == null) {
+                        extensionClasses.put(n, clazz);
+                    } else if (c != clazz) {
+                        throw new IllegalStateException(""Duplicate extension "" + type.getName() + "" name "" + n + "" on "" + c.getName() + "" and "" + clazz.getName());
+                    }
+                }
+            }
+        }
+    }",657-711,0.9659045,0.94259024,0.94259024
+2,2,,15,15,0,org.apache.dubbo.common.URL,valueOf,(Ljava/lang/String;)Lorg/apache/dubbo/common/URL;,28,50,56.0%,"public static URL valueOf(String url) {
+        if (url == null || (url = url.trim()).length() == 0) {
+            throw new IllegalArgumentException(""url == null"");
+        }
+        String protocol = null;
+        String username = null;
+        String password = null;
+        String host = null;
+        int port = 0;
+        String path = null;
+        Map<String, String> parameters = null;
+        int i = url.indexOf(""?""); // seperator between body and parameters 
+        if (i >= 0) {
+            String[] parts = url.substring(i + 1).split(""\\&"");
+            parameters = new HashMap<String, String>();
+            for (String part : parts) {
+                part = part.trim();
+                if (part.length() > 0) {
+                    int j = part.indexOf('=');
+                    if (j >= 0) {
+                        parameters.put(part.substring(0, j), part.substring(j + 1));
+                    } else {
+                        parameters.put(part, part);
+                    }
+                }
+            }
+            url = url.substring(0, i);
+        }
+        i = url.indexOf(""://"");
+        if (i >= 0) {
+            if (i == 0) throw new IllegalStateException(""url missing protocol: \"""" + url + ""\"""");
+            protocol = url.substring(0, i);
+            url = url.substring(i + 3);
+        } else {
+            // case: file:/path/to/file.txt
+            i = url.indexOf("":/"");
+            if (i >= 0) {
+                if (i == 0) throw new IllegalStateException(""url missing protocol: \"""" + url + ""\"""");
+                protocol = url.substring(0, i);
+                url = url.substring(i + 1);
+            }
+        }
+
+        i = url.indexOf(""/"");
+        if (i >= 0) {
+            path = url.substring(i + 1);
+            url = url.substring(0, i);
+        }
+        i = url.lastIndexOf(""@"");
+        if (i >= 0) {
+            username = url.substring(0, i);
+            int j = username.indexOf("":"");
+            if (j >= 0) {
+                password = username.substring(j + 1);
+                username = username.substring(0, j);
+            }
+            url = url.substring(i + 1);
+        }
+        i = url.lastIndexOf("":"");
+        if (i >= 0 && i < url.length() - 1) {
+            if (url.lastIndexOf(""%"") > i) {
+                // ipv6 address with scope id
+                // e.g. fe80:0:0:0:894:aeec:f37d:23e1%en0
+                // see https://howdoesinternetwork.com/2013/ipv6-zone-id
+                // ignore
+            } else {
+                port = Integer.parseInt(url.substring(i+1));
+                url = url.substring(0, i);
+            }
+        }
+        if (url.length() > 0) host = url;
+        return new URL(protocol, username, password, host, port, path, parameters);
+    }",179-251,0.95445585,0.98005605,0.98005605
+3,3,,15,15,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,reselect,(Lorg/apache/dubbo/rpc/cluster/LoadBalance;Lorg/apache/dubbo/rpc/Invocation;Ljava/util/List;Ljava/util/List;Z)Lorg/apache/dubbo/rpc/Invoker;,17,24,70.8%,"private Invoker<T> reselect(LoadBalance loadbalance, Invocation invocation,
+                                List<Invoker<T>> invokers, List<Invoker<T>> selected, boolean availablecheck)
+            throws RpcException {
+
+        //Allocating one in advance, this list is certain to be used.
+        List<Invoker<T>> reselectInvokers = new ArrayList<Invoker<T>>(invokers.size() > 1 ? (invokers.size() - 1) : invokers.size());
+
+        //First, try picking a invoker not in `selected`.
+        if (availablecheck) { // invoker.isAvailable() should be checked
+            for (Invoker<T> invoker : invokers) {
+                if (invoker.isAvailable()) {
+                    if (selected == null || !selected.contains(invoker)) {
+                        reselectInvokers.add(invoker);
+                    }
+                }
+            }
+            if (!reselectInvokers.isEmpty()) {
+                return loadbalance.select(reselectInvokers, getUrl(), invocation);
+            }
+        } else { // do not check invoker.isAvailable()
+            for (Invoker<T> invoker : invokers) {
+                if (selected == null || !selected.contains(invoker)) {
+                    reselectInvokers.add(invoker);
+                }
+            }
+            if (!reselectInvokers.isEmpty()) {
+                return loadbalance.select(reselectInvokers, getUrl(), invocation);
+            }
+        }
+        // Just pick an available invoker using loadbalance policy
+        {
+            if (selected != null) {
+                for (Invoker<T> invoker : selected) {
+                    if ((invoker.isAvailable()) // available first
+                            && !reselectInvokers.contains(invoker)) {
+                        reselectInvokers.add(invoker);
+                    }
+                }
+            }
+            if (!reselectInvokers.isEmpty()) {
+                return loadbalance.select(reselectInvokers, getUrl(), invocation);
+            }
+        }
+        return null;
+    }",179-223,0.9632046,0.957,0.957
+4,4,,12,12,0,org.apache.dubbo.common.extension.ExtensionLoader,loadExtensionClasses,()Ljava/util/Map;,15,17,88.2%,"private Map<String, Class<?>> loadExtensionClasses() {
+        final SPI defaultAnnotation = type.getAnnotation(SPI.class);
+        if (defaultAnnotation != null) {
+            String value = defaultAnnotation.value();
+            if ((value = value.trim()).length() > 0) {
+                String[] names = NAME_SEPARATOR.split(value);
+                if (names.length > 1) {
+                    throw new IllegalStateException(""more than 1 default extension name on extension "" + type.getName()
+                            + "": "" + Arrays.toString(names));
+                }
+                if (names.length == 1) cachedDefaultName = names[0];
+            }
+        }
+
+        Map<String, Class<?>> extensionClasses = new HashMap<String, Class<?>>();
+        loadDirectory(extensionClasses, DUBBO_INTERNAL_DIRECTORY, type.getName());
+        loadDirectory(extensionClasses, DUBBO_INTERNAL_DIRECTORY, type.getName().replace(""org.apache"", ""com.alibaba""));
+        loadDirectory(extensionClasses, DUBBO_DIRECTORY, type.getName());
+        loadDirectory(extensionClasses, DUBBO_DIRECTORY, type.getName().replace(""org.apache"", ""com.alibaba""));
+        loadDirectory(extensionClasses, SERVICES_DIRECTORY, type.getName());
+        loadDirectory(extensionClasses, SERVICES_DIRECTORY, type.getName().replace(""org.apache"", ""com.alibaba""));
+        return extensionClasses;
+    }",576-598,0.9570923,0.9883394,0.9883394
+5,5,,11,11,0,org.apache.dubbo.rpc.cluster.loadbalance.RoundRobinLoadBalance,doSelect,(Ljava/util/List;Lorg/apache/dubbo/common/URL;Lorg/apache/dubbo/rpc/Invocation;)Lorg/apache/dubbo/rpc/Invoker;,20,31,64.5%,"@Override
+    protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+        String key = invokers.get(0).getUrl().getServiceKey() + ""."" + invocation.getMethodName();
+        int length = invokers.size(); // Number of invokers
+        int maxWeight = 0; // The maximum weight
+        int minWeight = Integer.MAX_VALUE; // The minimum weight
+        final LinkedHashMap<Invoker<T>, IntegerWrapper> invokerToWeightMap = new LinkedHashMap<Invoker<T>, IntegerWrapper>();
+        int weightSum = 0;
+        for (int i = 0; i < length; i++) {
+            int weight = getWeight(invokers.get(i), invocation);
+            maxWeight = Math.max(maxWeight, weight); // Choose the maximum weight
+            minWeight = Math.min(minWeight, weight); // Choose the minimum weight
+            if (weight > 0) {
+                invokerToWeightMap.put(invokers.get(i), new IntegerWrapper(weight));
+                weightSum += weight;
+            }
+        }
+        AtomicPositiveInteger sequence = sequences.get(key);
+        if (sequence == null) {
+            sequences.putIfAbsent(key, new AtomicPositiveInteger());
+            sequence = sequences.get(key);
+        }
+        int currentSequence = sequence.getAndIncrement();
+        if (maxWeight > 0 && minWeight < maxWeight) {
+            int mod = currentSequence % weightSum;
+            for (int i = 0; i < maxWeight; i++) {
+                for (Map.Entry<Invoker<T>, IntegerWrapper> each : invokerToWeightMap.entrySet()) {
+                    final Invoker<T> k = each.getKey();
+                    final IntegerWrapper v = each.getValue();
+                    if (mod == 0 && v.getValue() > 0) {
+                        return k;
+                    }
+                    if (v.getValue() > 0) {
+                        v.decrement();
+                        mod--;
+                    }
+                }
+            }
+        }
+        // Round robin
+        return invokers.get(currentSequence % length);
+    }",40-81,0.9465456,0.98947424,0.98947424
+6,6,,10,10,0,org.apache.dubbo.rpc.cluster.loadbalance.LeastActiveLoadBalance,doSelect,(Ljava/util/List;Lorg/apache/dubbo/common/URL;Lorg/apache/dubbo/rpc/Invocation;)Lorg/apache/dubbo/rpc/Invoker;,25,33,75.8%,"@Override
+    protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+        int length = invokers.size(); // Number of invokers
+        int leastActive = -1; // The least active value of all invokers
+        int leastCount = 0; // The number of invokers having the same least active value (leastActive)
+        int[] leastIndexs = new int[length]; // The index of invokers having the same least active value (leastActive)
+        int totalWeight = 0; // The sum of weights
+        int firstWeight = 0; // Initial value, used for comparision
+        boolean sameWeight = true; // Every invoker has the same weight value?
+        for (int i = 0; i < length; i++) {
+            Invoker<T> invoker = invokers.get(i);
+            int active = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName()).getActive(); // Active number
+            int weight = invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.WEIGHT_KEY, Constants.DEFAULT_WEIGHT); // Weight
+            if (leastActive == -1 || active < leastActive) { // Restart, when find a invoker having smaller least active value.
+                leastActive = active; // Record the current least active value
+                leastCount = 1; // Reset leastCount, count again based on current leastCount
+                leastIndexs[0] = i; // Reset
+                totalWeight = weight; // Reset
+                firstWeight = weight; // Record the weight the first invoker
+                sameWeight = true; // Reset, every invoker has the same weight value?
+            } else if (active == leastActive) { // If current invoker's active value equals with leaseActive, then accumulating.
+                leastIndexs[leastCount++] = i; // Record index number of this invoker
+                totalWeight += weight; // Add this invoker's weight to totalWeight.
+                // If every invoker has the same weight?
+                if (sameWeight && i > 0
+                        && weight != firstWeight) {
+                    sameWeight = false;
+                }
+            }
+        }
+        // assert(leastCount > 0)
+        if (leastCount == 1) {
+            // If we got exactly one invoker having the least active value, return this invoker directly.
+            return invokers.get(leastIndexs[0]);
+        }
+        if (!sameWeight && totalWeight > 0) {
+            // If (not every invoker has the same weight & at least one invoker's weight>0), select randomly based on totalWeight.
+            int offsetWeight = ThreadLocalRandom.current().nextInt(totalWeight);
+            // Return a invoker based on the random value.
+            for (int i = 0; i < leastCount; i++) {
+                int leastIndex = leastIndexs[i];
+                offsetWeight -= getWeight(invokers.get(leastIndex), invocation);
+                if (offsetWeight <= 0)
+                    return invokers.get(leastIndex);
+            }
+        }
+        // If all invokers have the same weight value or totalWeight=0, return evenly.
+        return invokers.get(leastIndexs[ThreadLocalRandom.current().nextInt(leastCount)]);
+    }",36-84,0.932647,0.9937109,0.9937109
+7,7,,10,10,0,org.apache.dubbo.rpc.cluster.loadbalance.RandomLoadBalance,doSelect,(Ljava/util/List;Lorg/apache/dubbo/common/URL;Lorg/apache/dubbo/rpc/Invocation;)Lorg/apache/dubbo/rpc/Invoker;,10,16,62.5%,"@Override
+    protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+        int length = invokers.size(); // Number of invokers
+        int totalWeight = 0; // The sum of weights
+        boolean sameWeight = true; // Every invoker has the same weight?
+        for (int i = 0; i < length; i++) {
+            int weight = getWeight(invokers.get(i), invocation);
+            totalWeight += weight; // Sum
+            if (sameWeight && i > 0
+                    && weight != getWeight(invokers.get(i - 1), invocation)) {
+                sameWeight = false;
+            }
+        }
+        if (totalWeight > 0 && !sameWeight) {
+            // If (not every invoker has the same weight & at least one invoker's weight>0), select randomly based on totalWeight.
+            int offset = ThreadLocalRandom.current().nextInt(totalWeight);
+            // Return a invoker based on the random value.
+            for (int i = 0; i < length; i++) {
+                offset -= getWeight(invokers.get(i), invocation);
+                if (offset < 0) {
+                    return invokers.get(i);
+                }
+            }
+        }
+        // If all invokers have the same weight value or totalWeight=0, return evenly.
+        return invokers.get(ThreadLocalRandom.current().nextInt(length));
+    }",34-60,0.9481327,0.97892475,0.97892475
+8,8,,9,8,1,org.apache.dubbo.common.extension.ExtensionLoader,getExtension,(Ljava/lang/String;)Ljava/lang/Object;,15,17,88.2%,"@SuppressWarnings(""unchecked"")
+    public T getExtension(String name) {
+        if (name == null || name.length() == 0)
+            throw new IllegalArgumentException(""Extension name == null"");
+        if (""true"".equals(name)) {
+            return getDefaultExtension();
+        }
+        Holder<Object> holder = cachedInstances.get(name);
+        if (holder == null) {
+            cachedInstances.putIfAbsent(name, new Holder<Object>());
+            holder = cachedInstances.get(name);
+        }
+        Object instance = holder.get();
+        if (instance == null) {
+            synchronized (holder) {
+                instance = holder.get();
+                if (instance == null) {
+                    instance = createExtension(name);
+                    holder.set(instance);
+                }
+            }
+        }
+        return (T) instance;
+    }",304-327,0.9472452,0.9916831,0.9916831
+9,9,,9,9,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,doSelect,(Lorg/apache/dubbo/rpc/cluster/LoadBalance;Lorg/apache/dubbo/rpc/Invocation;Ljava/util/List;Ljava/util/List;)Lorg/apache/dubbo/rpc/Invoker;,10,19,52.6%,"private Invoker<T> doSelect(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
+        if (invokers == null || invokers.isEmpty())
+            return null;
+        if (invokers.size() == 1)
+            return invokers.get(0);
+        Invoker<T> invoker = loadbalance.select(invokers, getUrl(), invocation);
+
+        //If the `invoker` is in the  `selected` or invoker is unavailable && availablecheck is true, reselect.
+        if ((selected != null && selected.contains(invoker))
+                || (!invoker.isAvailable() && getUrl() != null && availablecheck)) {
+            try {
+                Invoker<T> rinvoker = reselect(loadbalance, invocation, invokers, selected, availablecheck);
+                if (rinvoker != null) {
+                    invoker = rinvoker;
+                } else {
+                    //Check the index of current selected invoker, if it's not the last one, choose the one at index+1.
+                    int index = invokers.indexOf(invoker);
+                    try {
+                        //Avoid collision
+                        invoker = index < invokers.size() - 1 ? invokers.get(index + 1) : invokers.get(0);
+                    } catch (Exception e) {
+                        logger.warn(e.getMessage() + "" may because invokers list dynamic change, ignore."", e);
+                    }
+                }
+            } catch (Throwable t) {
+                logger.error(""cluster reselect fail reason is :"" + t.getMessage() + "" if can not solve, you can set cluster.availablecheck=false in url"", t);
+            }
+        }
+        return invoker;
+    }",138-167,0.9389679,0.9936311,0.9936311
+10,10,,8,8,0,org.apache.dubbo.common.URL,getServiceKey,()Ljava/lang/String;,9,11,81.8%,"public String getServiceKey() {
+        String inf = getServiceInterface();
+        if (inf == null) return null;
+        StringBuilder buf = new StringBuilder();
+        String group = getParameter(Constants.GROUP_KEY);
+        if (group != null && group.length() > 0) {
+            buf.append(group).append(""/"");
+        }
+        buf.append(inf);
+        String version = getParameter(Constants.VERSION_KEY);
+        if (version != null && version.length() > 0) {
+            buf.append("":"").append(version);
+        }
+        return buf.toString();
+    }",1219-1233,0.96453416,0.9811508,0.9811508
+11,,,8,8,0,org.apache.dubbo.common.extension.ExtensionLoader,injectExtension,(Ljava/lang/Object;)Ljava/lang/Object;,5,18,27.8%,"private T injectExtension(T instance) {
+        try {
+            if (objectFactory != null) {
+                for (Method method : instance.getClass().getMethods()) {
+                    if (method.getName().startsWith(""set"")
+                            && method.getParameterTypes().length == 1
+                            && Modifier.isPublic(method.getModifiers())) {
+                        Class<?> pt = method.getParameterTypes()[0];
+                        try {
+                            String property = method.getName().length() > 3 ? method.getName().substring(3, 4).toLowerCase() + method.getName().substring(4) : """";
+                            Object object = objectFactory.getExtension(pt, property);
+                            if (object != null) {
+                                method.invoke(instance, object);
+                            }
+                        } catch (Exception e) {
+                            logger.error(""fail to inject via method "" + method.getName()
+                                    + "" of interface "" + type.getName() + "": "" + e.getMessage(), e);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        return instance;
+    }",523-548,0.9503294,0.97438264,0.97438264
+12,,,6,6,0,org.apache.dubbo.common.extension.ExtensionLoader,loadResource,(Ljava/util/Map;Ljava/lang/ClassLoader;Ljava/net/URL;)V,18,23,78.3%,"private void loadResource(Map<String, Class<?>> extensionClasses, ClassLoader classLoader, java.net.URL resourceURL) {
+        try {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(resourceURL.openStream(), ""utf-8""));
+            try {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    final int ci = line.indexOf('#');
+                    if (ci >= 0) line = line.substring(0, ci);
+                    line = line.trim();
+                    if (line.length() > 0) {
+                        try {
+                            String name = null;
+                            int i = line.indexOf('=');
+                            if (i > 0) {
+                                name = line.substring(0, i).trim();
+                                line = line.substring(i + 1).trim();
+                            }
+                            if (line.length() > 0) {
+                                loadClass(extensionClasses, resourceURL, Class.forName(line, true, classLoader), name);
+                            }
+                        } catch (Throwable t) {
+                            IllegalStateException e = new IllegalStateException(""Failed to load extension class(interface: "" + type + "", class line: "" + line + "") in "" + resourceURL + "", cause: "" + t.getMessage(), t);
+                            exceptions.put(line, e);
+                        }
+                    }
+                }
+            } finally {
+                reader.close();
+            }
+        } catch (Throwable t) {
+            logger.error(""Exception when load extension class(interface: "" +
+                    type + "", class file: "" + resourceURL + "") in "" + resourceURL, t);
+        }
+    }",622-655,0.94922274,0.9644491,0.9644491
+13,,,6,5,1,org.apache.dubbo.common.extension.ExtensionLoader,getAdaptiveExtension,()Ljava/lang/Object;,11,15,73.3%,"@SuppressWarnings(""unchecked"")
+    public T getAdaptiveExtension() {
+        Object instance = cachedAdaptiveInstance.get();
+        if (instance == null) {
+            if (createAdaptiveInstanceError == null) {
+                synchronized (cachedAdaptiveInstance) {
+                    instance = cachedAdaptiveInstance.get();
+                    if (instance == null) {
+                        try {
+                            instance = createAdaptiveExtension();
+                            cachedAdaptiveInstance.set(instance);
+                        } catch (Throwable t) {
+                            createAdaptiveInstanceError = t;
+                            throw new IllegalStateException(""fail to create adaptive instance: "" + t.toString(), t);
+                        }
+                    }
+                }
+            } else {
+                throw new IllegalStateException(""fail to create adaptive instance: "" + createAdaptiveInstanceError.toString(), createAdaptiveInstanceError);
+            }
+        }
+
+        return (T) instance;
+    }",447-470,0.95038426,0.97996575,0.97996575
+14,,,6,6,0,org.apache.dubbo.common.logger.LoggerFactory,getLogger,(Ljava/lang/Class;)Lorg/apache/dubbo/common/logger/Logger;,5,5,100.0%,"public static Logger getLogger(Class<?> key) {
+        FailsafeLogger logger = LOGGERS.get(key.getName());
+        if (logger == null) {
+            LOGGERS.putIfAbsent(key.getName(), new FailsafeLogger(LOGGER_ADAPTER.getLogger(key)));
+            logger = LOGGERS.get(key.getName());
+        }
+        return logger;
+    }",105-112,0.95619136,0.9904554,0.9904554
+15,,,5,5,0,org.apache.dubbo.common.extension.ExtensionLoader,createExtension,(Ljava/lang/String;)Ljava/lang/Object;,10,17,58.8%,"@SuppressWarnings(""unchecked"")
+    private T createExtension(String name) {
+        Class<?> clazz = getExtensionClasses().get(name);
+        if (clazz == null) {
+            throw findException(name);
+        }
+        try {
+            T instance = (T) EXTENSION_INSTANCES.get(clazz);
+            if (instance == null) {
+                EXTENSION_INSTANCES.putIfAbsent(clazz, clazz.newInstance());
+                instance = (T) EXTENSION_INSTANCES.get(clazz);
+            }
+            injectExtension(instance);
+            Set<Class<?>> wrapperClasses = cachedWrapperClasses;
+            if (wrapperClasses != null && !wrapperClasses.isEmpty()) {
+                for (Class<?> wrapperClass : wrapperClasses) {
+                    instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
+                }
+            }
+            return instance;
+        } catch (Throwable t) {
+            throw new IllegalStateException(""Extension instance(name: "" + name + "", class: "" +
+                    type + "")  could not be instantiated: "" + t.getMessage(), t);
+        }
+    }",497-521,0.9458063,0.993787,0.993787
+16,,,4,3,1,org.apache.dubbo.common.extension.ExtensionLoader,getExtensionClasses,()Ljava/util/Map;,9,9,100.0%,"private Map<String, Class<?>> getExtensionClasses() {
+        Map<String, Class<?>> classes = cachedClasses.get();
+        if (classes == null) {
+            synchronized (cachedClasses) {
+                classes = cachedClasses.get();
+                if (classes == null) {
+                    classes = loadExtensionClasses();
+                    cachedClasses.set(classes);
+                }
+            }
+        }
+        return classes;
+    }",561-573,0.9577174,0.9820938,0.9820938
+17,,,4,4,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,select,(Lorg/apache/dubbo/rpc/cluster/LoadBalance;Lorg/apache/dubbo/rpc/Invocation;Ljava/util/List;Ljava/util/List;)Lorg/apache/dubbo/rpc/Invoker;,8,13,61.5%,"protected Invoker<T> select(LoadBalance loadbalance, Invocation invocation, List<Invoker<T>> invokers, List<Invoker<T>> selected) throws RpcException {
+        if (invokers == null || invokers.isEmpty())
+            return null;
+        String methodName = invocation == null ? """" : invocation.getMethodName();
+
+        boolean sticky = invokers.get(0).getUrl().getMethodParameter(methodName, Constants.CLUSTER_STICKY_KEY, Constants.DEFAULT_CLUSTER_STICKY);
+        {
+            //ignore overloaded method
+            if (stickyInvoker != null && !invokers.contains(stickyInvoker)) {
+                stickyInvoker = null;
+            }
+            //ignore concurrency problem
+            if (sticky && stickyInvoker != null && (selected == null || !selected.contains(stickyInvoker))) {
+                if (availablecheck && stickyInvoker.isAvailable()) {
+                    return stickyInvoker;
+                }
+            }
+        }
+        Invoker<T> invoker = doSelect(loadbalance, invocation, invokers, selected);
+
+        if (sticky) {
+            stickyInvoker = invoker;
+        }
+        return invoker;
+    }",112-136,0.9348099,0.9956335,0.9956335
+18,,,4,4,0,org.apache.dubbo.rpc.cluster.directory.AbstractDirectory,setRouters,(Ljava/util/List;)V,7,9,77.8%,"protected void setRouters(List<Router> routers) {
+        // copy list
+        routers = routers == null ? new ArrayList<Router>() : new ArrayList<Router>(routers);
+        // append url router
+        String routerKey = url.getParameter(Constants.ROUTER_KEY);
+        if (routerKey != null && routerKey.length() > 0) {
+            RouterFactory routerFactory = ExtensionLoader.getExtensionLoader(RouterFactory.class).getExtension(routerKey);
+            routers.add(routerFactory.getRouter(url));
+        }
+        // append mock invoker selector
+        routers.add(new MockInvokersSelector());
+        Collections.sort(routers);
+        this.routers = routers;
+    }",99-112,0.9644553,0.9900475,0.9900475
+19,,,3,3,0,org.apache.dubbo.rpc.RpcStatus,getStatus,(Lorg/apache/dubbo/common/URL;Ljava/lang/String;)Lorg/apache/dubbo/rpc/RpcStatus;,10,10,100.0%,"public static RpcStatus getStatus(URL url) {
+        String uri = url.toIdentityString();
+        RpcStatus status = SERVICE_STATISTICS.get(uri);
+        if (status == null) {
+            SERVICE_STATISTICS.putIfAbsent(uri, new RpcStatus());
+            status = SERVICE_STATISTICS.get(uri);
+        }
+        return status;
+    }",63-71,0.9404846,0.99460286,0.99460286
+20,,,3,3,0,org.apache.dubbo.common.extension.ExtensionLoader,getExtensionLoader,(Ljava/lang/Class;)Lorg/apache/dubbo/common/extension/ExtensionLoader;,8,12,66.7%,"@SuppressWarnings(""unchecked"")
+    public static <T> ExtensionLoader<T> getExtensionLoader(Class<T> type) {
+        if (type == null)
+            throw new IllegalArgumentException(""Extension type == null"");
+        if (!type.isInterface()) {
+            throw new IllegalArgumentException(""Extension type("" + type + "") is not interface!"");
+        }
+        if (!withExtensionAnnotation(type)) {
+            throw new IllegalArgumentException(""Extension type("" + type +
+                    "") is not extension, because WITHOUT @"" + SPI.class.getSimpleName() + "" Annotation!"");
+        }
+
+        ExtensionLoader<T> loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        if (loader == null) {
+            EXTENSION_LOADERS.putIfAbsent(type, new ExtensionLoader<T>(type));
+            loader = (ExtensionLoader<T>) EXTENSION_LOADERS.get(type);
+        }
+        return loader;
+    }",105-123,0.9413451,0.99458903,0.99458903
+21,,,3,3,0,org.apache.dubbo.common.URL,addParameterIfAbsent,(Ljava/lang/String;Ljava/lang/String;)Lorg/apache/dubbo/common/URL;,6,8,75.0%,"public URL addParameterIfAbsent(String key, String value) {
+        if (key == null || key.length() == 0
+                || value == null || value.length() == 0) {
+            return this;
+        }
+        if (hasParameter(key)) {
+            return this;
+        }
+        Map<String, String> map = new HashMap<String, String>(getParameters());
+        map.put(key, value);
+        return new URL(protocol, username, password, host, port, path, map);
+    }",947-958,0.966105,0.9833948,0.9833948
+22,,,3,3,0,org.apache.dubbo.common.URL,getParameter,(Ljava/lang/String;J)J,5,9,55.6%,"public String getParameter(String key) {
+        String value = parameters.get(key);
+        if (value == null || value.length() == 0) {
+            value = parameters.get(Constants.DEFAULT_KEY_PREFIX + key);
+        }
+        return value;
+    }",428-434,0.9326529,0.9837195,0.9837195
+23,,overload of an earlier row - skipped,3,3,0,org.apache.dubbo.common.URL,getParameter,(Ljava/lang/String;)Ljava/lang/String;,4,4,100.0%,"public String getParameter(String key) {
+        String value = parameters.get(key);
+        if (value == null || value.length() == 0) {
+            value = parameters.get(Constants.DEFAULT_KEY_PREFIX + key);
+        }
+        return value;
+    }",428-434,0.9326529,0.9837195,0.9837195
+24,,overload of an earlier row - skipped,3,3,0,org.apache.dubbo.common.URL,getParameter,(Ljava/lang/String;Z)Z,4,4,100.0%,"public String getParameter(String key) {
+        String value = parameters.get(key);
+        if (value == null || value.length() == 0) {
+            value = parameters.get(Constants.DEFAULT_KEY_PREFIX + key);
+        }
+        return value;
+    }",428-434,0.9326529,0.9837195,0.9837195
+25,,,3,3,0,org.apache.dubbo.rpc.cluster.loadbalance.AbstractLoadBalance,select,(Ljava/util/List;Lorg/apache/dubbo/common/URL;Lorg/apache/dubbo/rpc/Invocation;)Lorg/apache/dubbo/rpc/Invoker;,4,5,80.0%,"@Override
+    public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) {
+        if (invokers == null || invokers.isEmpty())
+            return null;
+        if (invokers.size() == 1)
+            return invokers.get(0);
+        return doSelect(invokers, url, invocation);
+    }",38-45,0.92526275,0.98728514,0.98728514
+26,,overload of an earlier row - skipped,3,3,0,org.apache.dubbo.common.URL,getParameter,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,3,4,75.0%,"public String getParameter(String key) {
+        String value = parameters.get(key);
+        if (value == null || value.length() == 0) {
+            value = parameters.get(Constants.DEFAULT_KEY_PREFIX + key);
+        }
+        return value;
+    }",428-434,0.9326529,0.9837195,0.9837195
+27,,,2,2,0,org.apache.dubbo.common.URL,getMethodParameter,(Ljava/lang/String;Ljava/lang/String;I)I,6,10,60.0%,"public String getMethodParameter(String method, String key) {
+        String value = parameters.get(method + ""."" + key);
+        if (value == null || value.length() == 0) {
+            return getParameter(key);
+        }
+        return value;
+    }",659-665,0.9340655,0.986473,0.986473
+28,,overload of an earlier row - skipped,2,2,0,org.apache.dubbo.common.URL,getMethodParameter,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,3,4,75.0%,"public String getMethodParameter(String method, String key) {
+        String value = parameters.get(method + ""."" + key);
+        if (value == null || value.length() == 0) {
+            return getParameter(key);
+        }
+        return value;
+    }",659-665,0.9340655,0.986473,0.986473
+29,,overload of an earlier row - skipped,2,2,0,org.apache.dubbo.common.URL,getMethodParameter,(Ljava/lang/String;Ljava/lang/String;Z)Z,3,4,75.0%,"public String getMethodParameter(String method, String key) {
+        String value = parameters.get(method + ""."" + key);
+        if (value == null || value.length() == 0) {
+            return getParameter(key);
+        }
+        return value;
+    }",659-665,0.9340655,0.986473,0.986473
+30,,,2,2,0,org.apache.dubbo.common.utils.DubboAppender,append,(Lorg/apache/log4j/spi/LoggingEvent;)V,3,5,60.0%,"@Override
+    public void append(LoggingEvent event) {
+        super.append(event);
+        if (available) {
+            Log temp = parseLog(event);
+            logList.add(temp);
+        }
+    }",43-50,0.9384908,0.99389577,0.99389577
+31,,,1,1,0,org.apache.dubbo.common.extension.factory.AdaptiveExtensionFactory,<init>,()V,8,8,100.0%,"public AdaptiveExtensionFactory() {
+        ExtensionLoader<ExtensionFactory> loader = ExtensionLoader.getExtensionLoader(ExtensionFactory.class);
+        List<ExtensionFactory> list = new ArrayList<ExtensionFactory>();
+        for (String name : loader.getSupportedExtensions()) {
+            list.add(loader.getExtension(name));
+        }
+        factories = Collections.unmodifiableList(list);
+    }",35-42,0.94384277,0.9889492,0.9889492
+32,,,1,1,0,org.apache.dubbo.common.logger.LoggerFactory,setLoggerAdapter,(Lorg/apache/dubbo/common/logger/LoggerAdapter;)V,6,8,75.0%,"public static void setLoggerAdapter(String loggerAdapter) {
+        if (loggerAdapter != null && loggerAdapter.length() > 0) {
+            setLoggerAdapter(ExtensionLoader.getExtensionLoader(LoggerAdapter.class).getExtension(loggerAdapter));
+        }
+    }",77-81,0.9472461,0.9445849,0.9445849
+33,,,1,1,0,org.apache.dubbo.rpc.cluster.loadbalance.AbstractLoadBalance,getWeight,(Lorg/apache/dubbo/rpc/Invoker;Lorg/apache/dubbo/rpc/Invocation;)I,5,9,55.6%,"protected int getWeight(Invoker<?> invoker, Invocation invocation) {
+        int weight = invoker.getUrl().getMethodParameter(invocation.getMethodName(), Constants.WEIGHT_KEY, Constants.DEFAULT_WEIGHT);
+        if (weight > 0) {
+            long timestamp = invoker.getUrl().getParameter(Constants.REMOTE_TIMESTAMP_KEY, 0L);
+            if (timestamp > 0L) {
+                int uptime = (int) (System.currentTimeMillis() - timestamp);
+                int warmup = invoker.getUrl().getParameter(Constants.WARMUP_KEY, Constants.DEFAULT_WARMUP);
+                if (uptime > 0 && uptime < warmup) {
+                    weight = calculateWarmupWeight(uptime, warmup, weight);
+                }
+            }
+        }
+        return weight;
+    }",49-62,0.95122415,0.99329966,0.99329966
+34,,,1,1,0,org.apache.dubbo.common.URL,hasParameter,(Ljava/lang/String;)Z,2,2,100.0%,"public boolean hasParameter(String key) {
+        String value = getParameter(key);
+        return value != null && value.length() > 0;
+    }",646-649,0.86004126,0.94386226,0.94386226
+35,,,1,1,0,org.apache.dubbo.common.extension.ExtensionLoader,getSupportedExtensions,()Ljava/util/Set;,2,2,100.0%,"public Set<String> getSupportedExtensions() {
+        Map<String, Class<?>> clazzes = getExtensionClasses();
+        return Collections.unmodifiableSet(new TreeSet<String>(clazzes.keySet()));
+    }",352-355,0.8734812,0.9599664,0.9599664
+36,,,1,1,0,org.apache.dubbo.common.utils.AtomicPositiveInteger,getAndIncrement,()I,1,1,100.0%,"public final int getAndIncrement() {
+        return indexUpdater.getAndIncrement(this) & Integer.MAX_VALUE;
+    }",38-40,0.868313,0.9419054,0.9419054
+37,,,1,1,0,org.apache.dubbo.rpc.RpcStatus,getActive,()I,1,1,100.0%,"public int getActive() {
+        return active.get();
+    }",179-181,0.8106654,0.8784469,0.8784469
+38,,,0,0,0,org.apache.dubbo.common.URL,buildString,(ZZZZ[Ljava/lang/String;)Ljava/lang/String;,19,27,70.4%,"private String buildString(boolean appendUser, boolean appendParameter, String... parameters) {
+        return buildString(appendUser, appendParameter, false, false, parameters);
+    }",1160-1162,0.8301445,0.92197156,0.92197156
+39,,,0,0,0,org.apache.dubbo.common.URL,<init>,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/util/Map;)V,14,17,82.4%,"protected URL() {
+        this.protocol = null;
+        this.username = null;
+        this.password = null;
+        this.host = null;
+        this.port = 0;
+        this.path = null;
+        this.parameters = null;
+    }",107-115,0.9657144,0.9714325,0.9714325
+40,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,<init>,(Ljava/lang/Class;)V,11,11,100.0%,"private ExtensionLoader(Class<?> type) {
+        this.type = type;
+        objectFactory = (type == ExtensionFactory.class ? null : ExtensionLoader.getExtensionLoader(ExtensionFactory.class).getAdaptiveExtension());
+    }",96-99,0.8551865,0.9369221,0.9369221
+41,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,loadDirectory,(Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;)V,11,14,78.6%,"private void loadDirectory(Map<String, Class<?>> extensionClasses, String dir, String type) {
+        String fileName = dir + type;
+        try {
+            Enumeration<java.net.URL> urls;
+            ClassLoader classLoader = findClassLoader();
+            if (classLoader != null) {
+                urls = classLoader.getResources(fileName);
+            } else {
+                urls = ClassLoader.getSystemResources(fileName);
+            }
+            if (urls != null) {
+                while (urls.hasMoreElements()) {
+                    java.net.URL resourceURL = urls.nextElement();
+                    loadResource(extensionClasses, classLoader, resourceURL);
+                }
+            }
+        } catch (Throwable t) {
+            logger.error(""Exception when load extension class(interface: "" +
+                    type + "", description file: "" + fileName + "")."", t);
+        }
+    }",600-620,0.9531028,0.9870385,0.9870385
+42,,,0,0,0,org.apache.dubbo.common.logger.log4j.Log4jLoggerAdapter,<init>,()V,11,16,68.8%,"@SuppressWarnings(""unchecked"")
+    public Log4jLoggerAdapter() {
+        try {
+            org.apache.log4j.Logger logger = LogManager.getRootLogger();
+            if (logger != null) {
+                Enumeration<Appender> appenders = logger.getAllAppenders();
+                if (appenders != null) {
+                    while (appenders.hasMoreElements()) {
+                        Appender appender = appenders.nextElement();
+                        if (appender instanceof FileAppender) {
+                            FileAppender fileAppender = (FileAppender) appender;
+                            String filename = fileAppender.getFile();
+                            file = new File(filename);
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+        }
+    }",34-54,0.9503752,0.9721825,0.9721825
+43,,,0,0,0,org.apache.dubbo.rpc.RpcStatus,<init>,()V,11,11,100.0%,"private RpcStatus() {
+    }",56-57,0.8137011,0.92636657,0.92636657
+44,,,0,0,0,org.apache.dubbo.rpc.cluster.directory.AbstractDirectory,<init>,(Lorg/apache/dubbo/common/URL;Lorg/apache/dubbo/common/URL;Ljava/util/List;)V,7,8,87.5%,"public AbstractDirectory(URL url) {
+        this(url, null);
+    }",53-55,0.81639165,0.90928143,0.90928143
+45,,,0,0,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,<init>,(Lorg/apache/dubbo/rpc/cluster/Directory;Lorg/apache/dubbo/common/URL;)V,7,8,87.5%,"public AbstractClusterInvoker(Directory<T> directory) {
+        this(directory, directory.getUrl());
+    }",57-59,0.8189852,0.9172296,0.9172296
+46,,,0,0,0,org.apache.dubbo.common.URL,addParameter,(Ljava/lang/String;Ljava/lang/String;)Lorg/apache/dubbo/common/URL;,6,8,75.0%,"public URL addParameter(String key, boolean value) {
+        return addParameter(key, String.valueOf(value));
+    }",885-887,0.8408871,0.9182369,0.9182369
+47,,,0,0,0,org.apache.dubbo.rpc.cluster.directory.StaticDirectory,<init>,(Lorg/apache/dubbo/common/URL;Ljava/util/List;Ljava/util/List;)V,4,5,80.0%,"public StaticDirectory(List<Invoker<T>> invokers) {
+        this(null, invokers, null);
+    }",35-37,0.8268599,0.9152079,0.9152079
+48,,,0,0,0,org.apache.dubbo.common.URL,getNumbers,()Ljava/util/Map;,3,3,100.0%,"private Map<String, Number> getNumbers() {
+        if (numbers == null) { // concurrent initialization is tolerant
+            numbers = new ConcurrentHashMap<String, Number>();
+        }
+        return numbers;
+    }",452-457,0.9137169,0.98380035,0.98380035
+49,,,0,0,0,org.apache.dubbo.common.URL,toIdentityString,()Ljava/lang/String;,3,3,100.0%,"public String toIdentityString() {
+        if (identity != null) {
+            return identity;
+        }
+        return identity = buildString(true, false); // only return identity message, see the method ""equals"" and ""hashCode""
+    }",1102-1107,0.8826251,0.9701655,0.9701655
+50,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,getAdaptiveExtensionClass,()Ljava/lang/Class;,3,4,75.0%,"private Class<?> getAdaptiveExtensionClass() {
+        getExtensionClasses();
+        if (cachedAdaptiveClass != null) {
+            return cachedAdaptiveClass;
+        }
+        return cachedAdaptiveClass = createAdaptiveExtensionClass();
+    }",744-750,0.94440573,0.9860531,0.9860531
+51,,,0,0,0,org.apache.dubbo.common.logger.log4j.Log4jLogger,<init>,(Lorg/apache/log4j/Logger;)V,3,3,100.0%,"public Log4jLogger(org.apache.log4j.Logger logger) {
+        this.logger = logger;
+    }",30-32,0.8649788,0.955252,0.955252
+52,,,0,0,0,org.apache.dubbo.common.logger.support.FailsafeLogger,<init>,(Lorg/apache/dubbo/common/logger/Logger;)V,3,3,100.0%,"public FailsafeLogger(Logger logger) {
+        this.logger = logger;
+    }",27-29,0.81244105,0.89240915,0.89240915
+53,,,0,0,0,org.apache.dubbo.common.utils.AtomicPositiveInteger,<init>,()V,3,3,100.0%,"public AtomicPositiveInteger() {
+    }",31-32,0.8258785,0.93475205,0.93475205
+54,,,0,0,0,org.apache.dubbo.rpc.cluster.loadbalance.RoundRobinLoadBalance$IntegerWrapper,<init>,(I)V,3,3,100.0%,"public IntegerWrapper(int value) {
+            this.value = value;
+        }",86-88,-0.3420209,-0.5081191,-0.5081191
+55,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,isWrapperClass,(Ljava/lang/Class;)Z,2,4,50.0%,"private boolean isWrapperClass(Class<?> clazz) {
+        try {
+            clazz.getConstructor(type);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }",713-720,0.928383,0.99268353,0.99268353
+56,,,0,0,0,org.apache.dubbo.common.logger.log4j.Log4jLogger,info,(Ljava/lang/String;)V,2,2,100.0%,"@Override
+    public void info(String msg) {
+        logger.log(FQCN, Level.INFO, msg, null);
+    }",64-67,0.8476297,0.941225,0.941225
+57,,,0,0,0,org.apache.dubbo.common.utils.Holder,set,(Ljava/lang/Object;)V,2,2,100.0%,"public void set(T value) {
+        this.value = value;
+    }",26-28,0.81321055,0.81157637,0.81157637
+58,,,0,0,0,org.apache.dubbo.rpc.RpcInvocation,<init>,()V,2,2,100.0%,"public RpcInvocation() {
+    }",47-48,0.8225521,0.93301374,0.93301374
+59,,,0,0,0,org.apache.dubbo.rpc.RpcInvocation,setMethodName,(Ljava/lang/String;)V,2,2,100.0%,"public void setMethodName(String methodName) {
+        this.methodName = methodName;
+    }",121-123,0.7510337,0.5321059,0.5321059
+60,,overload of an earlier row - skipped,0,0,0,org.apache.dubbo.rpc.cluster.directory.AbstractDirectory,<init>,(Lorg/apache/dubbo/common/URL;Ljava/util/List;)V,2,2,100.0%,"public AbstractDirectory(URL url) {
+        this(url, null);
+    }",53-55,0.81639165,0.90928143,0.90928143
+61,,,0,0,0,org.apache.dubbo.rpc.cluster.loadbalance.RoundRobinLoadBalance,<init>,()V,2,2,100.0%,"public IntegerWrapper(int value) {
+            this.value = value;
+        }",86-88,-0.3420209,-0.5081191,-0.5081191
+62,,overload of an earlier row - skipped,0,0,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,<init>,(Lorg/apache/dubbo/rpc/cluster/Directory;)V,2,2,100.0%,"public AbstractClusterInvoker(Directory<T> directory) {
+        this(directory, directory.getUrl());
+    }",57-59,0.8189852,0.9172296,0.9172296
+63,,overload of an earlier row - skipped,0,0,0,org.apache.dubbo.common.URL,buildString,(ZZ[Ljava/lang/String;)Ljava/lang/String;,1,1,100.0%,"private String buildString(boolean appendUser, boolean appendParameter, String... parameters) {
+        return buildString(appendUser, appendParameter, false, false, parameters);
+    }",1160-1162,0.8301445,0.92197156,0.92197156
+64,,,0,0,0,org.apache.dubbo.common.URL,getHost,()Ljava/lang/String;,1,1,100.0%,"public String getHost() {
+        return host;
+    }",308-310,0.80217123,0.85806924,0.85806924
+65,,,0,0,0,org.apache.dubbo.common.URL,getParameters,()Ljava/util/Map;,1,1,100.0%,"public Map<String, String> getParameters() {
+        return parameters;
+    }",416-418,0.8391381,0.9108537,0.9108537
+66,,,0,0,0,org.apache.dubbo.common.URL,getPath,()Ljava/lang/String;,1,1,100.0%,"public String getPath() {
+        return path;
+    }",401-403,0.80569655,0.86366445,0.86366445
+67,,,0,0,0,org.apache.dubbo.common.URL,getServiceInterface,()Ljava/lang/String;,1,1,100.0%,"public String getServiceInterface() {
+        return getParameter(Constants.INTERFACE_KEY, path);
+    }",1248-1250,0.82819754,0.9063263,0.9063263
+68,,,0,0,0,org.apache.dubbo.common.URL,setProtocol,(Ljava/lang/String;)Lorg/apache/dubbo/common/URL;,1,1,100.0%,"public URL setProtocol(String protocol) {
+        return new URL(protocol, username, password, host, port, path, getParameters());
+    }",279-281,0.8202383,0.92457485,0.92457485
+69,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,createAdaptiveExtension,()Ljava/lang/Object;,1,3,33.3%,"@SuppressWarnings(""unchecked"")
+    private T createAdaptiveExtension() {
+        try {
+            return injectExtension((T) getAdaptiveExtensionClass().newInstance());
+        } catch (Exception e) {
+            throw new IllegalStateException(""Can not create adaptive extension "" + type + "", cause: "" + e.getMessage(), e);
+        }
+    }",735-742,0.8903032,0.97565925,0.97565925
+70,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,findClassLoader,()Ljava/lang/ClassLoader;,1,1,100.0%,"private static ClassLoader findClassLoader() {
+        return ExtensionLoader.class.getClassLoader();
+    }",125-127,0.83850294,0.93006504,0.93006504
+71,,,0,0,0,org.apache.dubbo.common.extension.ExtensionLoader,withExtensionAnnotation,(Ljava/lang/Class;)Z,1,1,100.0%,"private static <T> boolean withExtensionAnnotation(Class<T> type) {
+        return type.isAnnotationPresent(SPI.class);
+    }",101-103,0.8251433,0.9268802,0.9268802
+72,,,0,0,0,org.apache.dubbo.common.logger.log4j.Log4jLoggerAdapter,getLogger,(Ljava/lang/Class;)Lorg/apache/dubbo/common/logger/Logger;,1,1,100.0%,"@Override
+    public Logger getLogger(Class<?> key) {
+        return new Log4jLogger(LogManager.getLogger(key));
+    }",90-93,0.8447577,0.93986714,0.93986714
+73,,overload of an earlier row - skipped,0,0,0,org.apache.dubbo.common.logger.log4j.Log4jLoggerAdapter,getLogger,(Ljava/lang/String;)Lorg/apache/dubbo/common/logger/Logger;,1,1,100.0%,"@Override
+    public Logger getLogger(Class<?> key) {
+        return new Log4jLogger(LogManager.getLogger(key));
+    }",90-93,0.8447577,0.93986714,0.93986714
+74,,,0,0,0,org.apache.dubbo.common.utils.Holder,get,()Ljava/lang/Object;,1,1,100.0%,"public T get() {
+        return value;
+    }",30-32,0.82281965,0.9070474,0.9070474
+75,,,0,0,0,org.apache.dubbo.rpc.RpcInvocation,getMethodName,()Ljava/lang/String;,1,1,100.0%,"@Override
+    public String getMethodName() {
+        return methodName;
+    }",116-119,0.8965473,0.9449304,0.9449304
+76,,,0,0,0,org.apache.dubbo.rpc.cluster.directory.AbstractDirectory,getUrl,()Lorg/apache/dubbo/common/URL;,1,1,100.0%,"@Override
+    public URL getUrl() {
+        return url;
+    }",90-93,0.86261135,0.94127697,0.94127697
+77,,,0,0,0,org.apache.dubbo.rpc.cluster.support.AbstractClusterInvoker,getUrl,()Lorg/apache/dubbo/common/URL;,1,1,100.0%,"@Override
+    public URL getUrl() {
+        return directory.getUrl();
+    }",75-78,0.8426399,0.93077695,0.93077695

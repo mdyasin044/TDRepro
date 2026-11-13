@@ -1,0 +1,821 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,13,13,0,com.github.jknack.handlebars.Handlebars$Utils,escapeExpression,(Ljava/lang/CharSequence;)Ljava/lang/String;,8,22,36.4%,"public static String escapeExpression(final CharSequence input) {
+      if (input == null || input.length() == 0) {
+        return """";
+      }
+      // Don't escape SafeStrings, since they're already safe
+      if (input instanceof SafeString) {
+        return input.toString();
+      }
+      StringBuilder html = new StringBuilder(input.length());
+      for (int i = 0; i < input.length(); i++) {
+        char ch = input.charAt(i);
+        switch (ch) {
+          case '<':
+            html.append(""&lt;"");
+            break;
+          case '>':
+            html.append(""&gt;"");
+            break;
+          case '""':
+            html.append(""&quot;"");
+            break;
+          case '\'':
+            html.append(""&#x27;"");
+            break;
+          case '`':
+            html.append(""&#x60;"");
+            break;
+          case '&':
+            html.append(""&amp;"");
+            break;
+          default:
+            html.append(ch);
+        }
+      }
+      return html.toString();
+    }",217-252,0.8511349,0.977298,0.977298
+2,2,,9,9,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitBody,(Lcom/github/jknack/handlebars/internal/HbsParser$BodyContext;)Lcom/github/jknack/handlebars/Template;,4,21,19.0%,"@Override
+  public Template visitBody(final BodyContext ctx) {
+    List<StatementContext> stats = ctx.statement();
+    if (stats.size() == 0) {
+      return Template.EMPTY;
+    }
+    if (stats.size() == 1) {
+      return visit(stats.get(0));
+    }
+    TemplateList list = new TemplateList();
+    Template prev = null;
+    for (StatementContext statement : stats) {
+      Template candidate = visit(statement);
+      if (candidate != null) {
+        // join consecutive piece of text
+        if (candidate instanceof Text) {
+          if (!(prev instanceof Text)) {
+            list.add(candidate);
+            prev = candidate;
+          } else {
+            ((Text) prev).append(((Text) candidate).text());
+          }
+        } else {
+          list.add(candidate);
+          prev = candidate;
+        }
+      }
+    }
+    if (list.size() == 1) {
+      return list.iterator().next();
+    }
+    return list;
+  }",427-459,0.876532,0.982754,0.982754
+3,3,,9,9,0,com.github.jknack.handlebars.Context,get,(Ljava/lang/String;)Ljava/lang/Object;,2,13,15.4%,"public Object get(final String key) {
+    if (MUSTACHE_THIS.equals(key) || THIS.equals(key)) {
+      return model;
+    }
+    if (key.startsWith(PARENT)) {
+      return parent == null ? null : parent.get(key.substring(PARENT.length()));
+    }
+    String[] path = toPath(key);
+    Object value = get(path);
+    if (value == null) {
+      // No luck, check the extended context.
+      value = get(extendedContext, key);
+      // No luck, but before checking at the parent scope we need to check for
+      // the 'this' qualifier. If present, no look up will be done.
+      if (value == null && !path[0].equals(THIS)) {
+        value = get(parent, key);
+      }
+      // See at the data context
+      if (value == null && data != null) {
+        value = data.get(key.startsWith(""@"") ? key.substring(1) : key);
+      }
+    }
+    return value == NULL ? null : value;
+  }",396-419,0.95976126,0.9875606,0.9875606
+4,4,,7,7,0,com.github.jknack.handlebars.internal.Variable,merge,(Lcom/github/jknack/handlebars/Context;Ljava/io/Writer;)V,11,24,45.8%,"@SuppressWarnings(""unchecked"")
+  @Override
+  protected void merge(final Context scope, final Writer writer)
+      throws IOException {
+    Helper<Object> helper = helper(name);
+    if (helper != null) {
+      Options options = new Options.Builder(handlebars, scope, this)
+          .setParams(params(scope))
+          .setHash(hash(scope))
+          .build();
+      CharSequence result = helper.apply(determineContext(scope), options);
+      if (escape(result)) {
+        writer.append(Handlebars.Utils.escapeExpression(result));
+      } else if (result != null) {
+        writer.append(result);
+      }
+    } else {
+      Object value = constant == null ? scope.get(name) : constant;
+      if (value == null) {
+        value = missingValueResolver.resolve(determineContext(scope), name);
+      }
+      if (value != null) {
+        if (value instanceof Lambda) {
+          value =
+              Lambdas.merge(handlebars, (Lambda<Object, Object>) value, scope,
+                  this);
+        }
+        String stringValue = value.toString();
+        // TODO: Add formatter hook
+        if (escape(value)) {
+          writer.append(Handlebars.Utils.escapeExpression(stringValue));
+        } else {
+          // DON'T escape none String values.
+          writer.append(stringValue);
+        }
+      }
+    }
+  }",184-221,0.89349884,0.98390085,0.98390085
+5,5,,4,4,0,com.github.jknack.handlebars.internal.HelperResolver,params,(Ljava/util/List;)Lcom/github/jknack/handlebars/internal/HelperResolver;,3,4,75.0%,"protected Object[] params(final Context scope) {
+    if (params.size() <= 1) {
+      return PARAMS;
+    }
+    Object[] values = new Object[params.size() - 1];
+    for (int i = 1; i < params.size(); i++) {
+      Object value = params.get(i);
+      Object resolved = ParamType.parse(scope, value);
+      values[i - 1] = resolved == null && handlebars.allowStringParams()
+          ? value : resolved;
+    }
+    return values;
+  }",89-101,0.9389955,0.9848058,0.9848058
+6,,overload of an earlier row - skipped,4,4,0,com.github.jknack.handlebars.internal.HelperResolver,params,(Lcom/github/jknack/handlebars/Context;)[Ljava/lang/Object;,2,8,25.0%,"protected Object[] params(final Context scope) {
+    if (params.size() <= 1) {
+      return PARAMS;
+    }
+    Object[] values = new Object[params.size() - 1];
+    for (int i = 1; i < params.size(); i++) {
+      Object value = params.get(i);
+      Object resolved = ParamType.parse(scope, value);
+      values[i - 1] = resolved == null && handlebars.allowStringParams()
+          ? value : resolved;
+    }
+    return values;
+  }",89-101,0.9389955,0.9848058,0.9848058
+7,6,,3,3,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitTemplate,(Lcom/github/jknack/handlebars/internal/HbsParser$TemplateContext;)Lcom/github/jknack/handlebars/Template;,12,12,100.0%,"@Override
+  public Template visitTemplate(final TemplateContext ctx) {
+    Template template = visitBody(ctx.body());
+    this.handlebars = null;
+    this.filename = null;
+    this.hasTag = null;
+    this.line.delete(0, line.length());
+    this.line = null;
+    if (rootBuilder) {
+      this.partials.clear();
+      this.stacktraceList.clear();
+    }
+    this.partials = null;
+    this.stacktraceList = null;
+    return template;
+  }",317-332,0.8894481,0.98348486,0.98348486
+8,7,,3,3,0,com.github.jknack.handlebars.internal.TemplateBuilder,newVar,(Lorg/antlr/v4/runtime/Token;Lcom/github/jknack/handlebars/internal/Variable$Type;Ljava/util/List;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;)Lcom/github/jknack/handlebars/Template;,8,12,66.7%,"private Template newVar(final Token name, final Type varType, final List<Object> params,
+      final Map<String, Object> hash, final String startDelimiter, final String endDelimiter) {
+    String varName = name.getText();
+    Helper<Object> helper = handlebars.helper(varName);
+    if (helper == null && (params.size() > 0 || hash.size() > 0)) {
+      Helper<Object> helperMissing =
+          handlebars.helper(Handlebars.HELPER_MISSING);
+      if (helperMissing == null) {
+        reportError(null, name.getLine(), name.getCharPositionInLine(), ""could not find helper: '""
+            + varName + ""'"");
+      }
+    }
+    return new Variable(handlebars, varName, varType, params, hash)
+        .startDelimiter(startDelimiter)
+        .endDelimiter(endDelimiter)
+        .filename(filename)
+        .position(name.getLine(), name.getCharPositionInLine());
+  }",219-236,0.9485884,0.9942322,0.9942322
+9,8,,2,2,0,com.github.jknack.handlebars.internal.HelperResolver,hash,(Lcom/github/jknack/handlebars/Context;)Ljava/util/Map;,7,7,100.0%,"protected Map<String, Object> hash(final Context context) {
+    Map<String, Object> result = new LinkedHashMap<String, Object>();
+    for (Entry<String, Object> entry : hash.entrySet()) {
+      Object value = entry.getValue();
+      value = ParamType.parse(context, value);
+      result.put(entry.getKey(), value);
+    }
+    return result;
+  }",73-81,0.78400534,0.84079266,0.84079266
+10,9,,2,2,0,com.github.jknack.handlebars.internal.TemplateBuilder,hash,(Ljava/util/List;)Ljava/util/Map;,6,7,85.7%,"private Map<String, Object> hash(final List<HashContext> ctx) {
+    if (ctx == null || ctx.size() == 0) {
+      return Collections.emptyMap();
+    }
+    Map<String, Object> result = new LinkedHashMap<String, Object>();
+    for (HashContext hc : ctx) {
+      result.put(hc.QID().getText(), super.visit(hc.hashValue()));
+    }
+    return result;
+  }",244-253,0.96032697,0.983131,0.983131
+11,10,,2,2,0,com.github.jknack.handlebars.internal.TemplateBuilder,params,(Ljava/util/List;)Ljava/util/List;,6,7,85.7%,"private List<Object> params(final List<ParamContext> params) {
+    if (params == null || params.size() == 0) {
+      return Collections.emptyList();
+    }
+    List<Object> result = new ArrayList<Object>();
+    for (ParamContext param : params) {
+      result.add(super.visit(param));
+    }
+    return result;
+  }",261-270,0.92884123,0.97061586,0.97061586
+12,,,2,2,0,com.github.jknack.handlebars.internal.HelperResolver,determineContext,(Lcom/github/jknack/handlebars/Context;)Ljava/lang/Object;,4,5,80.0%,"protected Object determineContext(final Context context) {
+    if (params.size() == 0) {
+      return context.model();
+    }
+    Object value = params.get(0);
+    value = ParamType.parse(context, value);
+    return value;
+  }",110-117,0.98335856,0.96908706,0.96908706
+13,,overload of an earlier row - skipped,2,2,0,com.github.jknack.handlebars.internal.HelperResolver,hash,(Ljava/util/Map;)Lcom/github/jknack/handlebars/internal/HelperResolver;,3,4,75.0%,"protected Map<String, Object> hash(final Context context) {
+    Map<String, Object> result = new LinkedHashMap<String, Object>();
+    for (Entry<String, Object> entry : hash.entrySet()) {
+      Object value = entry.getValue();
+      value = ParamType.parse(context, value);
+      result.put(entry.getKey(), value);
+    }
+    return result;
+  }",73-81,0.78400534,0.84079266,0.84079266
+14,,,2,2,0,com.github.jknack.handlebars.internal.HelperResolver,helper,(Ljava/lang/String;)Lcom/github/jknack/handlebars/Helper;,3,8,37.5%,"protected Helper<Object> helper(final String name) {
+    Helper<Object> helper = handlebars.helper(name);
+    if (helper == null && (params.size() > 0 || hash.size() > 0)) {
+      Helper<Object> helperMissing =
+          handlebars.helper(Handlebars.HELPER_MISSING);
+      if (helperMissing == null) {
+        throw new IllegalArgumentException(""could not find helper: '"" + name
+            + ""'"");
+      }
+      helper = helperMissing;
+    }
+    return helper;
+  }",135-147,0.9580687,0.9873395,0.9873395
+15,,,1,1,0,com.github.jknack.handlebars.Context,root,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/Context;,6,6,100.0%,"private static Context root(final Object model) {
+    Context root = new Context(model);
+    root.extendedContext = new Context(new HashMap<String, Object>());
+    root.parent = null;
+    root.data = new HashMap<String, Object>();
+    root.data.put(PARTIALS, new HashMap<String, Template>());
+    return root;
+  }",270-277,0.8851293,0.92893636,0.92893636
+16,,,1,1,0,com.github.jknack.handlebars.Handlebars,registerHelper,(Ljava/lang/String;Lcom/github/jknack/handlebars/Helper;)Lcom/github/jknack/handlebars/Handlebars;,5,6,83.3%,"@SuppressWarnings(""unchecked"")
+  public <H> Handlebars registerHelper(final String name, final Helper<H> helper) {
+    notEmpty(name, ""A helper's name is required."");
+    notNull(helper, ""A helper is required."");
+    Helper<Object> oldHelper = helpers.put(name, (Helper<Object>) helper);
+    if (oldHelper != null) {
+      warn(""Helper '%s': %s has been replaced by %s"", name, oldHelper, helper);
+    }
+    return this;
+  }",477-486,0.99413896,0.9422558,0.9422558
+17,,,1,1,0,com.github.jknack.handlebars.internal.BaseTemplate,apply,(Lcom/github/jknack/handlebars/Context;Ljava/io/Writer;)V,5,17,29.4%,"@Override
+  public final String apply(final Object context) throws IOException {
+    return apply(wrap(context));
+  }",88-91,0.99687225,0.9410371,0.9410371
+18,,,1,1,0,com.github.jknack.handlebars.internal.ParamType,get,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/internal/ParamType;,5,6,83.3%,"private static ParamType get(final Object param) {
+    EnumSet<ParamType> types = EnumSet.allOf(ParamType.class);
+    for (ParamType type : types) {
+      if (type.apply(param)) {
+        return type;
+      }
+    }
+    throw new IllegalArgumentException(""Unsupported param: "" + param);
+  }",142-150,0.9518585,0.97163796,0.97163796
+19,,,1,1,0,com.github.jknack.handlebars.HumanizeHelper,register,(Lcom/github/jknack/handlebars/Handlebars;)V,4,4,100.0%,"public static void register(final Handlebars handlebars) {
+    notNull(handlebars, ""A handlebars object is required."");
+    for (HumanizeHelper helper : values()) {
+      handlebars.registerHelper(helper.name(), helper);
+    }
+  }",478-483,0.9952537,0.9515097,0.9515097
+20,,,1,1,0,com.github.jknack.handlebars.helper.I18nHelper,registerHelpers,(Lcom/github/jknack/handlebars/Handlebars;)V,3,3,100.0%,"public static void registerHelpers(final Handlebars handlebars) {
+    for (I18nHelper helper : values()) {
+      helper.registerHelper(handlebars);
+    }
+  }",303-307,0.99667645,0.9402265,0.9402265
+21,,overload of an earlier row - skipped,1,1,0,com.github.jknack.handlebars.internal.BaseTemplate,apply,(Lcom/github/jknack/handlebars/Context;)Ljava/lang/String;,3,3,100.0%,"@Override
+  public final String apply(final Object context) throws IOException {
+    return apply(wrap(context));
+  }",88-91,0.99687225,0.9410371,0.9410371
+22,,,1,1,0,com.github.jknack.handlebars.Handlebars,helper,(Ljava/lang/String;)Lcom/github/jknack/handlebars/Helper;,2,2,100.0%,"@SuppressWarnings(""unchecked"")
+  public <C> Helper<C> helper(final String name) {
+    notEmpty(name, ""A helper's name is required."");
+    return (Helper<C>) helpers.get(name);
+  }",463-467,0.9969968,0.9304056,0.9304056
+23,,,1,1,0,com.github.jknack.handlebars.HumanizeHelper,resolveLocale,(Lcom/github/jknack/handlebars/Options;)Ljava/util/Locale;,2,2,100.0%,"protected static Locale resolveLocale(final Options options) {
+    String locale = options.hash(""locale"", Locale.getDefault().toString());
+    return LocaleUtils.toLocale(locale);
+  }",468-471,0.9883624,0.96957964,0.96957964
+24,,,1,1,0,com.github.jknack.handlebars.internal.FastStringWriter,write,(Ljava/lang/String;)V,2,2,100.0%,"@Override
+  public void write(final char[] buffer) throws IOException {
+    this.buffer.append(buffer);
+  }",35-38,0.99453735,0.95230806,0.95230806
+25,,overload of an earlier row - skipped,1,1,0,com.github.jknack.handlebars.internal.BaseTemplate,apply,(Ljava/lang/Object;)Ljava/lang/String;,1,1,100.0%,"@Override
+  public final String apply(final Object context) throws IOException {
+    return apply(wrap(context));
+  }",88-91,0.99687225,0.9410371,0.9410371
+26,,,1,1,0,com.github.jknack.handlebars.internal.FastStringWriter,toString,()Ljava/lang/String;,1,1,100.0%,"@Override
+  public String toString() {
+    return buffer.toString();
+  }",77-80,0.99445105,0.95394355,0.95394355
+27,,,1,1,0,com.github.jknack.handlebars.internal.ParamType,parse,(Lcom/github/jknack/handlebars/Context;Ljava/lang/Object;)Ljava/lang/Object;,1,1,100.0%,"public static Object parse(final Context context, final Object param) {
+    return get(param).doParse(context, param);
+  }",132-134,0.9960562,0.94815934,0.94815934
+28,,,1,1,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitStringHash,(Lcom/github/jknack/handlebars/internal/HbsParser$StringHashContext;)Ljava/lang/Object;,1,1,100.0%,"@Override
+  public Object visitStringHash(final StringHashContext ctx) {
+    return ctx.getText().replace(""\\\"""", ""\"""");
+  }",287-290,0.9931947,0.96026343,0.96026343
+29,,,0,0,0,com.github.jknack.handlebars.internal.HbsParserFactory$1,parse,(Ljava/lang/String;)Lcom/github/jknack/handlebars/Template;,18,19,94.7%,"@Override
+      public Template parse(final String input) {
+        String fname = handlebars.getTemplateLoader().resolve(filename);
+        ANTLRInputStream stream = new ANTLRInputStream(input);
+        stream.name = fname;
+        final ANTLRErrorListener errorReporter = new HbsErrorReporter(stream.name);
+        final HbsLexer lexer = new HbsLexer(stream, startDelimiter,
+            endDelimiter) {
+
+          @Override
+          public void notifyListeners(final LexerNoViableAltException e) {
+            String text = _input.getText(Interval.of(_tokenStartCharIndex, _input.index()));
+            String msg = ""found: '"" + getErrorDisplay(text) + ""'"";
+            ANTLRErrorListener listener = getErrorListenerDispatch();
+            listener
+                .syntaxError(this, null, _tokenStartLine, _tokenStartCharPositionInLine, msg, e);
+          }
+
+          @Override
+          public void recover(final LexerNoViableAltException e) {
+            throw new IllegalArgumentException(e);
+          }
+        };
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(errorReporter);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        final HbsParser parser = new HbsParser(tokens) {
+          @Override
+          void setStart(final String start) {
+            lexer.start = start;
+          }
+
+          @Override
+          void setEnd(final String end) {
+            lexer.end = end;
+          }
+        };
+        parser.removeErrorListeners();
+        parser.addErrorListener(errorReporter);
+        parser.setErrorHandler(new HbsErrorStrategy());
+        parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+        ParseTree tree = parser.template();
+
+        if (handlebars.prettyWhitespaces()) {
+          // remove unnecessary spaces and new lines
+          new ParseTreeWalker().walk(new SpaceTrimmer(), tree);
+        }
+
+        TemplateBuilder builder = new TemplateBuilder(handlebars, fname, partials, stacktrace) {
+          @Override
+          protected void reportError(final CommonToken offendingToken, final int line,
+              final int column,
+              final String message) {
+            errorReporter.syntaxError(parser, offendingToken, line, column, message, null);
+          }
+        };
+        Template template = builder.visit(tree);
+        return template;
+      }",61-119,0.8588025,0.9788916,0.9788916
+30,,,0,0,0,com.github.jknack.handlebars.Handlebars,compile,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/github/jknack/handlebars/Template;,14,14,100.0%,"public Template compile(final URI uri) throws IOException {
+    return compile(uri, DELIM_START, DELIM_END);
+  }",378-380,0.9938246,0.9576795,0.9576795
+31,,,0,0,0,com.github.jknack.handlebars.Handlebars,registerBuiltinsHelpers,(Lcom/github/jknack/handlebars/Handlebars;)V,10,10,100.0%,"private static void registerBuiltinsHelpers(final Handlebars handlebars) {
+    handlebars.registerHelper(WithHelper.NAME, WithHelper.INSTANCE);
+    handlebars.registerHelper(IfHelper.NAME, IfHelper.INSTANCE);
+    handlebars.registerHelper(UnlessHelper.NAME, UnlessHelper.INSTANCE);
+    handlebars.registerHelper(EachHelper.NAME, EachHelper.INSTANCE);
+    handlebars.registerHelper(EmbeddedHelper.NAME, EmbeddedHelper.INSTANCE);
+    handlebars.registerHelper(BlockHelper.NAME, BlockHelper.INSTANCE);
+    handlebars.registerHelper(PartialHelper.NAME, PartialHelper.INSTANCE);
+    handlebars.registerHelper(PrecompileHelper.NAME,
+        PrecompileHelper.INSTANCE);
+    I18nHelper.registerHelpers(handlebars);
+  }",810-821,0.795071,0.95236486,0.95236486
+32,,,0,0,0,com.github.jknack.handlebars.Handlebars,<init>,(Lcom/github/jknack/handlebars/TemplateLoader;Lcom/github/jknack/handlebars/TemplateCache;)V,8,8,100.0%,"public SafeString(final CharSequence content) {
+      this.content = content;
+    }",114-116,0.9954474,0.9481143,0.9481143
+33,,,0,0,0,com.github.jknack.handlebars.Options,<init>,(Lcom/github/jknack/handlebars/Handlebars;Lcom/github/jknack/handlebars/Context;Lcom/github/jknack/handlebars/Template;Lcom/github/jknack/handlebars/Template;[Ljava/lang/Object;Ljava/util/Map;)V,8,8,100.0%,"public Builder(final Handlebars handlebars, final Context context, final Template fn) {
+      this.handlebars = notNull(handlebars, ""The handlebars is required."");
+      this.context = notNull(context, ""The context is required."");
+      this.fn = notNull(fn, ""The fn template is required."");
+    }",91-95,0.928466,0.98775685,0.98775685
+34,,,0,0,0,com.github.jknack.handlebars.Options$Builder,<init>,(Lcom/github/jknack/handlebars/Handlebars;Lcom/github/jknack/handlebars/Context;Lcom/github/jknack/handlebars/Template;)V,8,8,100.0%,"public Builder(final Handlebars handlebars, final Context context, final Template fn) {
+      this.handlebars = notNull(handlebars, ""The handlebars is required."");
+      this.context = notNull(context, ""The context is required."");
+      this.fn = notNull(fn, ""The fn template is required."");
+    }",91-95,0.928466,0.98775685,0.98775685
+35,,,0,0,0,com.github.jknack.handlebars.Options$Builder,build,()Lcom/github/jknack/handlebars/Options;,8,8,100.0%,"public Options build() {
+      Options options = new Options(handlebars, context, fn, inverse, params, hash);
+      // clear out references
+      handlebars = null;
+      context = null;
+      fn = null;
+      inverse = null;
+      params = null;
+      hash = null;
+      return options;
+    }",102-112,0.94049686,0.99427736,0.99427736
+36,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,<init>,(Lcom/github/jknack/handlebars/Handlebars;Ljava/lang/String;Ljava/util/Map;Ljava/util/LinkedList;)V,8,8,100.0%,"public TemplateBuilder(final Handlebars handlebars, final String filename,
+      final Map<String, Partial> partials,
+      final LinkedList<Stacktrace> stacktraceList) {
+    this.handlebars = notNull(handlebars, ""The handlebars can't be null."");
+    this.filename = notEmpty(filename, ""The filename can't be empty/null."");
+    this.partials = partials == null ? new HashMap<String, Partial>() : partials;
+    this.stacktraceList = stacktraceList == null ? new LinkedList<Stacktrace>() : stacktraceList;
+    this.rootBuilder = partials == null;
+  }",121-129,0.9083434,0.9834449,0.9834449
+37,,,0,0,0,com.github.jknack.handlebars.internal.Variable,<init>,(Lcom/github/jknack/handlebars/Handlebars;Ljava/lang/String;Ljava/lang/Object;Lcom/github/jknack/handlebars/internal/Variable$Type;Ljava/util/List;Ljava/util/Map;)V,8,8,100.0%,"public Variable(final Handlebars handlebars, final String name,
+      final Type type, final List<Object> params,
+      final Map<String, Object> hash) {
+    this(handlebars, name, null, type, params, hash);
+  }",132-136,0.9784703,0.9059586,0.9059586
+38,,,0,0,0,com.github.jknack.handlebars.Context$Builder,build,()Lcom/github/jknack/handlebars/Context;,6,7,85.7%,"public Context build() {
+      if (context.resolver == null) {
+        if (context.parent != null) {
+          // Set resolver from parent.
+          context.resolver = context.parent.resolver;
+        } else {
+          // Set default value resolvers: Java Bean like and Map resolvers.
+          context.setResolver(
+              new CompositeValueResolver(ValueResolver.VALUE_RESOLVERS));
+        }
+        // Expand resolver to the extended context.
+        if (context.extendedContext != null) {
+          context.extendedContext.resolver = context.resolver;
+        }
+      }
+      return context;
+    }",185-201,0.9019772,0.9902209,0.9902209
+39,,,0,0,0,com.github.jknack.handlebars.internal.HelperResolver,<init>,(Lcom/github/jknack/handlebars/Handlebars;)V,5,5,100.0%,"public HelperResolver(final Handlebars handlebars) {
+    this.handlebars = notNull(handlebars, ""The handlebars can't be null."");
+  }",63-65,0.9965566,0.9444135,0.9444135
+40,,,0,0,0,com.github.jknack.handlebars.Context,<init>,(Ljava/lang/Object;)V,4,6,66.7%,"public CompositeValueResolver(final ValueResolver... resolvers) {
+      this.resolvers = resolvers;
+    }",88-90,0.9900949,0.96878946,0.96878946
+41,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$2,apply,(Ljava/lang/Object;)Z,4,5,80.0%,"@Override
+    boolean apply(final Object param) {
+      return param instanceof Context;
+    }",31-34,0.9947258,0.9555147,0.9555147
+42,,,0,0,0,com.github.jknack.handlebars.internal.Variable,escape,(Ljava/lang/Object;)Z,4,6,66.7%,"@Override
+      public boolean escape() {
+        return false;
+      }",58-61,0.37404704,0.21630119,0.21630119
+43,,,0,0,0,com.github.jknack.handlebars.io.ClassPathTemplateLoader,<init>,(Ljava/lang/String;Ljava/lang/String;)V,4,4,100.0%,"public ClassPathTemplateLoader(final String prefix, final String suffix) {
+    setPrefix(prefix);
+    setSuffix(suffix);
+  }",43-46,0.99182606,0.96379864,0.96379864
+44,,,0,0,0,com.github.jknack.handlebars.Context,setResolver,(Lcom/github/jknack/handlebars/ValueResolver;)V,3,3,100.0%,"private void setResolver(final ValueResolver resolver) {
+    this.resolver = resolver;
+    extendedContext.resolver = resolver;
+  }",522-525,0.9580493,0.9832326,0.9832326
+45,,,0,0,0,com.github.jknack.handlebars.Context$Builder,<init>,(Ljava/lang/Object;)V,3,3,100.0%,"public CompositeValueResolver(final ValueResolver... resolvers) {
+      this.resolvers = resolvers;
+    }",88-90,0.9900949,0.96878946,0.96878946
+46,,,0,0,0,com.github.jknack.handlebars.Context$CompositeValueResolver,<init>,([Lcom/github/jknack/handlebars/ValueResolver;)V,3,3,100.0%,"public CompositeValueResolver(final ValueResolver... resolvers) {
+      this.resolvers = resolvers;
+    }",88-90,0.9900949,0.96878946,0.96878946
+47,,,0,0,0,com.github.jknack.handlebars.Handlebars,debug,(Ljava/lang/String;[Ljava/lang/Object;)V,3,3,100.0%,"public static void debug(final String message, final Object... args) {
+    if (logger.isDebugEnabled()) {
+      logger.debug(String.format(message, args));
+    }
+  }",767-771,0.99521244,0.95164585,0.95164585
+48,,,0,0,0,com.github.jknack.handlebars.TemplateLoader,setPrefix,(Ljava/lang/String;)V,3,4,75.0%,"public void setPrefix(final String prefix) {
+    this.prefix = notNull(prefix, ""A view prefix is required."");
+    if (!this.prefix.endsWith(""/"")) {
+      this.prefix += ""/"";
+    }
+  }",166-171,0.9692085,0.9761242,0.9761242
+49,,,0,0,0,com.github.jknack.handlebars.helper.I18nHelper,registerHelper,(Lcom/github/jknack/handlebars/Handlebars;)V,3,3,100.0%,"public void registerHelper(final Handlebars handlebars) {
+    notNull(handlebars, ""The handlebars is required."");
+    handlebars.registerHelper(name(), this);
+  }",293-296,0.99668,0.9462931,0.9462931
+50,,,0,0,0,com.github.jknack.handlebars.internal.BaseTemplate,position,(II)Lcom/github/jknack/handlebars/internal/BaseTemplate;,3,3,100.0%,"public BaseTemplate position(final int line, final int column) {
+    this.line = line;
+    this.column = column;
+    return this;
+  }",185-189,0.96108603,0.9666667,0.9666667
+51,,,0,0,0,com.github.jknack.handlebars.internal.BaseTemplate,wrap,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/Context;,3,3,100.0%,"private static Context wrap(final Object candidate) {
+    if (candidate instanceof Context) {
+      return (Context) candidate;
+    }
+    return Context.newContext(candidate);
+  }",145-150,0.98715824,0.9619696,0.9619696
+52,,,0,0,0,com.github.jknack.handlebars.internal.HbsErrorReporter,<init>,(Ljava/lang/String;)V,3,3,100.0%,"public HbsErrorReporter(final String filename) {
+    this.filename = notNull(filename, ""A filename is required."");
+  }",57-59,0.99709904,0.92974377,0.92974377
+53,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,hasTag,(Z)V,3,3,100.0%,"private boolean hasTag() {
+    if (handlebars.prettyWhitespaces()) {
+      return hasTag == null ? false : hasTag.booleanValue();
+    }
+    return false;
+  }",499-504,0.9862917,0.9279788,0.9279788
+54,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitVar,(Lcom/github/jknack/handlebars/internal/HbsParser$VarContext;)Lcom/github/jknack/handlebars/Template;,3,3,100.0%,"@Override
+  public Template visitVar(final VarContext ctx) {
+    hasTag(false);
+    return newVar(ctx.QID().getSymbol(), Type.VAR, params(ctx.param()), hash(ctx.hash()),
+        ctx.start.getText(), ctx.stop.getText());
+  }",187-192,0.99597627,0.93668437,0.93668437
+55,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.Handlebars,<init>,()V,2,2,100.0%,"public SafeString(final CharSequence content) {
+      this.content = content;
+    }",114-116,0.9954474,0.9481143,0.9481143
+56,,,0,0,0,com.github.jknack.handlebars.Handlebars,with,(Lcom/github/jknack/handlebars/TemplateCache;)Lcom/github/jknack/handlebars/Handlebars;,2,2,100.0%,"public Handlebars with(final TemplateLoader loader) {
+    this.loader = notNull(loader, ""The template loader is required."");
+    return this;
+  }",668-671,0.9953196,0.93092734,0.93092734
+57,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.Handlebars,with,(Lcom/github/jknack/handlebars/TemplateLoader;)Lcom/github/jknack/handlebars/Handlebars;,2,2,100.0%,"public Handlebars with(final TemplateLoader loader) {
+    this.loader = notNull(loader, ""The template loader is required."");
+    return this;
+  }",668-671,0.9953196,0.93092734,0.93092734
+58,,,0,0,0,com.github.jknack.handlebars.HumanizeHelper$9,apply,(Ljava/lang/Object;Lcom/github/jknack/handlebars/Options;)Ljava/lang/CharSequence;,2,2,100.0%,"@Override
+    public CharSequence apply(final Object value, final Options options)
+        throws IOException {
+      isTrue(value instanceof Number, ""found '%s', expected: 'number'"", value);
+      return Humanize.binaryPrefix((Number) value, resolveLocale(options));
+    }",51-56,0.9929589,0.96366256,0.96366256
+59,,,0,0,0,com.github.jknack.handlebars.Options,hash,(Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/Object;,2,2,100.0%,"public <T> T hash(final String name) {
+    return hash(name, null);
+  }",383-385,0.99664694,0.92896605,0.92896605
+60,,,0,0,0,com.github.jknack.handlebars.Options$Builder,setHash,(Ljava/util/Map;)Lcom/github/jknack/handlebars/Options$Builder;,2,2,100.0%,"public Builder setHash(final Map<String, Object> hash) {
+      this.hash = notNull(hash, ""The hash is required."");
+      return this;
+    }",120-123,0.98717016,0.9218211,0.9218211
+61,,,0,0,0,com.github.jknack.handlebars.Options$Builder,setParams,([Ljava/lang/Object;)Lcom/github/jknack/handlebars/Options$Builder;,2,2,100.0%,"public Builder setParams(final Object[] params) {
+      this.params = notNull(params, ""The params is required."");
+      return this;
+    }",142-145,0.9430203,0.8454183,0.8454183
+62,,,0,0,0,com.github.jknack.handlebars.TemplateLoader,normalize,(Ljava/lang/String;)Ljava/lang/String;,2,3,66.7%,"private String normalize(final String uri) {
+    if (uri.startsWith(""/"")) {
+      return uri.substring(1);
+    }
+    return uri;
+  }",144-149,0.96799093,0.96077055,0.96077055
+63,,,0,0,0,com.github.jknack.handlebars.TemplateLoader,setSuffix,(Ljava/lang/String;)V,2,2,100.0%,"public void setSuffix(final String suffix) {
+    this.suffix = notEmpty(suffix, ""The view suffix is required."");
+  }",179-181,0.9950719,0.95707196,0.95707196
+64,,,0,0,0,com.github.jknack.handlebars.internal.BaseTemplate,filename,(Ljava/lang/String;)Lcom/github/jknack/handlebars/internal/BaseTemplate;,2,2,100.0%,"public BaseTemplate filename(final String filename) {
+    this.filename = filename;
+    return this;
+  }",173-176,0.99504834,0.92762214,0.92762214
+65,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$2,doParse,(Lcom/github/jknack/handlebars/Context;Ljava/lang/Object;)Ljava/lang/Object;,2,2,100.0%,"@Override
+    Object doParse(final Context scope, final Object param) {
+      return ((Context) param).model();
+    }",36-39,0.9973609,0.9376408,0.9376408
+66,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.internal.Variable,<init>,(Lcom/github/jknack/handlebars/Handlebars;Ljava/lang/String;Lcom/github/jknack/handlebars/internal/Variable$Type;Ljava/util/List;Ljava/util/Map;)V,2,2,100.0%,"public Variable(final Handlebars handlebars, final String name,
+      final Type type, final List<Object> params,
+      final Map<String, Object> hash) {
+    this(handlebars, name, null, type, params, hash);
+  }",132-136,0.9784703,0.9059586,0.9059586
+67,,,0,0,0,com.github.jknack.handlebars.internal.Variable,endDelimiter,(Ljava/lang/String;)Lcom/github/jknack/handlebars/internal/Variable;,2,2,100.0%,"public Variable endDelimiter(final String endDelimiter) {
+    this.endDelimiter = endDelimiter;
+    return this;
+  }",263-266,0.97346,0.9878431,0.9878431
+68,,,0,0,0,com.github.jknack.handlebars.internal.Variable,startDelimiter,(Ljava/lang/String;)Lcom/github/jknack/handlebars/internal/Variable;,2,2,100.0%,"public Variable startDelimiter(final String startDelimiter) {
+    this.startDelimiter = startDelimiter;
+    return this;
+  }",274-277,0.9722037,0.9886391,0.9886391
+69,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.io.ClassPathTemplateLoader,<init>,()V,2,2,100.0%,"public ClassPathTemplateLoader(final String prefix, final String suffix) {
+    setPrefix(prefix);
+    setSuffix(suffix);
+  }",43-46,0.99182606,0.96379864,0.96379864
+70,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.io.ClassPathTemplateLoader,<init>,(Ljava/lang/String;)V,2,2,100.0%,"public ClassPathTemplateLoader(final String prefix, final String suffix) {
+    setPrefix(prefix);
+    setSuffix(suffix);
+  }",43-46,0.99182606,0.96379864,0.96379864
+71,,,0,0,0,com.github.jknack.handlebars.Context,newBuilder,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/Context$Builder;,1,1,100.0%,"public static Builder newBuilder(final Context parent, final Object model) {
+    notNull(parent, ""The parent context is required."");
+    return new Builder(parent, model);
+  }",558-561,0.9935247,0.934005,0.934005
+72,,,0,0,0,com.github.jknack.handlebars.Context,newContext,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/Context;,1,1,100.0%,"public static Context newContext(final Context parent, final Object model) {
+    return newBuilder(parent, model).build();
+  }",580-582,0.9946042,0.9454006,0.9454006
+73,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.Handlebars,compile,(Ljava/lang/String;)Lcom/github/jknack/handlebars/Template;,1,1,100.0%,"public Template compile(final URI uri) throws IOException {
+    return compile(uri, DELIM_START, DELIM_END);
+  }",378-380,0.9938246,0.9576795,0.9576795
+74,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.Handlebars,compile,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/github/jknack/handlebars/Template;,1,1,100.0%,"public Template compile(final URI uri) throws IOException {
+    return compile(uri, DELIM_START, DELIM_END);
+  }",378-380,0.9938246,0.9576795,0.9576795
+75,,,0,0,0,com.github.jknack.handlebars.Handlebars,getMissingValueResolver,()Lcom/github/jknack/handlebars/MissingValueResolver;,1,1,100.0%,"public MissingValueResolver getMissingValueResolver() {
+    return missingValueResolver;
+  }",597-599,0.99476445,0.95564973,0.95564973
+76,,,0,0,0,com.github.jknack.handlebars.Handlebars,getTemplateLoader,()Lcom/github/jknack/handlebars/TemplateLoader;,1,1,100.0%,"public TemplateLoader getTemplateLoader() {
+    return loader;
+  }",588-590,0.9966957,0.9406681,0.9406681
+77,,,0,0,0,com.github.jknack.handlebars.Handlebars,prettyWhitespaces,()Z,1,1,100.0%,"public boolean prettyWhitespaces() {
+    return prettyWhitespaces;
+  }",616-618,0.988734,0.9715724,0.9715724
+78,,,0,0,0,com.github.jknack.handlebars.Handlebars$1,<init>,()V,1,1,100.0%,"public SafeString(final CharSequence content) {
+      this.content = content;
+    }",114-116,0.9954474,0.9481143,0.9481143
+79,,,0,0,0,com.github.jknack.handlebars.Handlebars$1,get,(Ljava/lang/Object;)Lcom/github/jknack/handlebars/Template;,1,1,100.0%,"@Override
+    public Template get(final Object key) {
+      return null;
+    }",278-281,0.9939782,0.94902086,0.94902086
+80,,,0,0,0,com.github.jknack.handlebars.Handlebars$1,put,(Ljava/lang/Object;Lcom/github/jknack/handlebars/Template;)V,1,1,100.0%,"@Override
+    public void put(final Object key, final Template template) {
+    }",274-276,0.9956836,0.9443092,0.9443092
+81,,,0,0,0,com.github.jknack.handlebars.TemplateLoader,resolve,(Ljava/lang/String;)Ljava/lang/String;,1,1,100.0%,"public String resolve(final String uri) {
+    return prefix + normalize(uri) + suffix;
+  }",134-136,0.99708647,0.9351479,0.9351479
+82,,,0,0,0,com.github.jknack.handlebars.internal.HbsErrorStrategy,<init>,()V,1,1,100.0%,"public ErrorStrategyVisitor(final String startDelimiter, final String endDelimiter) {
+      this.startDelimiter = notEmpty(startDelimiter, ""The startDelimiter can't be empty/null."");
+      this.endDelimiter = notEmpty(endDelimiter, ""The end delimiter can't be empty/null."");
+    }",74-77,0.90868735,0.9954993,0.9954993
+83,,,0,0,0,com.github.jknack.handlebars.internal.HbsErrorStrategy,sync,(Lorg/antlr/v4/runtime/Parser;)V,1,1,100.0%,"@Override
+  public void sync(final Parser recognizer) {
+    // never sync
+  }",257-260,0.99666744,0.94620234,0.94620234
+84,,,0,0,0,com.github.jknack.handlebars.internal.HbsParserFactory,create,(Lcom/github/jknack/handlebars/Handlebars;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/github/jknack/handlebars/Parser;,1,1,100.0%,"public Parser create(final Handlebars handlebars,
+      final String filename,
+      final String startDelimiter,
+      final String endDelimiter,
+      final Map<String, Partial> partials,
+      final LinkedList<Stacktrace> stacktrace) {
+    return new Parser() {
+
+      @Override
+      public Template parse(final String input) {
+        String fname = handlebars.getTemplateLoader().resolve(filename);
+        ANTLRInputStream stream = new ANTLRInputStream(input);
+        stream.name = fname;
+        final ANTLRErrorListener errorReporter = new HbsErrorReporter(stream.name);
+        final HbsLexer lexer = new HbsLexer(stream, startDelimiter,
+            endDelimiter) {
+
+          @Override
+          public void notifyListeners(final LexerNoViableAltException e) {
+            String text = _input.getText(Interval.of(_tokenStartCharIndex, _input.index()));
+            String msg = ""found: '"" + getErrorDisplay(text) + ""'"";
+            ANTLRErrorListener listener = getErrorListenerDispatch();
+            listener
+                .syntaxError(this, null, _tokenStartLine, _tokenStartCharPositionInLine, msg, e);
+          }
+
+          @Override
+          public void recover(final LexerNoViableAltException e) {
+            throw new IllegalArgumentException(e);
+          }
+        };
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(errorReporter);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        final HbsParser parser = new HbsParser(tokens) {
+          @Override
+          void setStart(final String start) {
+            lexer.start = start;
+          }
+
+          @Override
+          void setEnd(final String end) {
+            lexer.end = end;
+          }
+        };
+        parser.removeErrorListeners();
+        parser.addErrorListener(errorReporter);
+        parser.setErrorHandler(new HbsErrorStrategy());
+        parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+        ParseTree tree = parser.template();
+
+        if (handlebars.prettyWhitespaces()) {
+          // remove unnecessary spaces and new lines
+          new ParseTreeWalker().walk(new SpaceTrimmer(), tree);
+        }
+
+        TemplateBuilder builder = new TemplateBuilder(handlebars, fname, partials, stacktrace) {
+          @Override
+          protected void reportError(final CommonToken offendingToken, final int line,
+              final int column,
+              final String message) {
+            errorReporter.syntaxError(parser, offendingToken, line, column, message, null);
+          }
+        };
+        Template template = builder.visit(tree);
+        return template;
+      }
+    };
+  }",53-121,0.86594784,0.98182386,0.98182386
+85,,overload of an earlier row - skipped,0,0,0,com.github.jknack.handlebars.internal.HbsParserFactory,create,(Lcom/github/jknack/handlebars/Handlebars;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/util/LinkedList;)Lcom/github/jknack/handlebars/Parser;,1,1,100.0%,"public Parser create(final Handlebars handlebars,
+      final String filename,
+      final String startDelimiter,
+      final String endDelimiter,
+      final Map<String, Partial> partials,
+      final LinkedList<Stacktrace> stacktrace) {
+    return new Parser() {
+
+      @Override
+      public Template parse(final String input) {
+        String fname = handlebars.getTemplateLoader().resolve(filename);
+        ANTLRInputStream stream = new ANTLRInputStream(input);
+        stream.name = fname;
+        final ANTLRErrorListener errorReporter = new HbsErrorReporter(stream.name);
+        final HbsLexer lexer = new HbsLexer(stream, startDelimiter,
+            endDelimiter) {
+
+          @Override
+          public void notifyListeners(final LexerNoViableAltException e) {
+            String text = _input.getText(Interval.of(_tokenStartCharIndex, _input.index()));
+            String msg = ""found: '"" + getErrorDisplay(text) + ""'"";
+            ANTLRErrorListener listener = getErrorListenerDispatch();
+            listener
+                .syntaxError(this, null, _tokenStartLine, _tokenStartCharPositionInLine, msg, e);
+          }
+
+          @Override
+          public void recover(final LexerNoViableAltException e) {
+            throw new IllegalArgumentException(e);
+          }
+        };
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(errorReporter);
+        CommonTokenStream tokens = new CommonTokenStream(lexer);
+        final HbsParser parser = new HbsParser(tokens) {
+          @Override
+          void setStart(final String start) {
+            lexer.start = start;
+          }
+
+          @Override
+          void setEnd(final String end) {
+            lexer.end = end;
+          }
+        };
+        parser.removeErrorListeners();
+        parser.addErrorListener(errorReporter);
+        parser.setErrorHandler(new HbsErrorStrategy());
+        parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+        ParseTree tree = parser.template();
+
+        if (handlebars.prettyWhitespaces()) {
+          // remove unnecessary spaces and new lines
+          new ParseTreeWalker().walk(new SpaceTrimmer(), tree);
+        }
+
+        TemplateBuilder builder = new TemplateBuilder(handlebars, fname, partials, stacktrace) {
+          @Override
+          protected void reportError(final CommonToken offendingToken, final int line,
+              final int column,
+              final String message) {
+            errorReporter.syntaxError(parser, offendingToken, line, column, message, null);
+          }
+        };
+        Template template = builder.visit(tree);
+        return template;
+      }
+    };
+  }",53-121,0.86594784,0.98182386,0.98182386
+86,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$1,apply,(Ljava/lang/Object;)Z,1,1,100.0%,"@Override
+    boolean apply(final Object param) {
+      return param instanceof Context;
+    }",31-34,0.9947258,0.9555147,0.9555147
+87,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$3,apply,(Ljava/lang/Object;)Z,1,1,100.0%,"@Override
+    boolean apply(final Object param) {
+      return param instanceof Context;
+    }",31-34,0.9947258,0.9555147,0.9555147
+88,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$4,apply,(Ljava/lang/Object;)Z,1,1,100.0%,"@Override
+    boolean apply(final Object param) {
+      return param instanceof Context;
+    }",31-34,0.9947258,0.9555147,0.9555147
+89,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$5,apply,(Ljava/lang/Object;)Z,1,1,100.0%,"@Override
+    boolean apply(final Object param) {
+      return param instanceof Context;
+    }",31-34,0.9947258,0.9555147,0.9555147
+90,,,0,0,0,com.github.jknack.handlebars.internal.ParamType$5,doParse,(Lcom/github/jknack/handlebars/Context;Ljava/lang/Object;)Ljava/lang/Object;,1,1,100.0%,"@Override
+    Object doParse(final Context scope, final Object param) {
+      return ((Context) param).model();
+    }",36-39,0.9973609,0.9376408,0.9376408
+91,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,visit,(Lorg/antlr/v4/runtime/tree/ParseTree;)Lcom/github/jknack/handlebars/Template;,1,1,100.0%,"@Override
+  public Template visit(final ParseTree tree) {
+    return (Template) super.visit(tree);
+  }",131-134,0.992585,0.9621315,0.9621315
+92,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitRefPram,(Lcom/github/jknack/handlebars/internal/HbsParser$RefPramContext;)Ljava/lang/Object;,1,1,100.0%,"@Override
+  public Object visitRefPram(final RefPramContext ctx) {
+    return ctx.getText();
+  }",302-305,0.9930099,0.96309847,0.96309847
+93,,,0,0,0,com.github.jknack.handlebars.internal.TemplateBuilder,visitStatement,(Lcom/github/jknack/handlebars/internal/HbsParser$StatementContext;)Lcom/github/jknack/handlebars/Template;,1,1,100.0%,"@Override
+  public Template visitStatement(final StatementContext ctx) {
+    return visit(ctx.getChild(0));
+  }",461-464,0.9962512,0.948129,0.948129
+94,,,0,0,0,com.github.jknack.handlebars.internal.Variable$Type$1,<init>,(Ljava/lang/String;I)V,1,1,100.0%,"public Variable(final Handlebars handlebars, final String name,
+      final Type type, final List<Object> params,
+      final Map<String, Object> hash) {
+    this(handlebars, name, null, type, params, hash);
+  }",132-136,0.9784703,0.9059586,0.9059586
+95,,,0,0,0,com.github.jknack.handlebars.internal.Variable$Type$2,<init>,(Ljava/lang/String;I)V,1,1,100.0%,"public Variable(final Handlebars handlebars, final String name,
+      final Type type, final List<Object> params,
+      final Map<String, Object> hash) {
+    this(handlebars, name, null, type, params, hash);
+  }",132-136,0.9784703,0.9059586,0.9059586
+96,,,0,0,0,com.github.jknack.handlebars.internal.Variable$Type$3,<init>,(Ljava/lang/String;I)V,1,1,100.0%,"public Variable(final Handlebars handlebars, final String name,
+      final Type type, final List<Object> params,
+      final Map<String, Object> hash) {
+    this(handlebars, name, null, type, params, hash);
+  }",132-136,0.9784703,0.9059586,0.9059586
+97,,,0,0,0,com.github.jknack.handlebars.internal.Variable$Type$3,escape,()Z,1,1,100.0%,"@Override
+      public boolean escape() {
+        return false;
+      }",58-61,0.37404704,0.21630119,0.21630119
