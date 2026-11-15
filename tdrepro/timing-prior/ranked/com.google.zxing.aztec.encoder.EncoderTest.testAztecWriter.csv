@@ -1,0 +1,1253 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,16,16,0,com.google.zxing.aztec.encoder.Encoder,drawModeMessage,(Lcom/google/zxing/common/BitMatrix;ZILcom/google/zxing/common/BitArray;)V,23,23,100.0%,"private static void drawModeMessage(BitMatrix matrix, boolean compact, int matrixSize, BitArray modeMessage) {
+    int center = matrixSize / 2;
+    if (compact) {
+      for (int i = 0; i < 7; i++) {
+        int offset = center - 3 + i;
+        if (modeMessage.get(i)) {
+          matrix.set(offset, center - 5);
+        }
+        if (modeMessage.get(i + 7)) {
+          matrix.set(center + 5, offset);
+        }
+        if (modeMessage.get(20 - i)) {
+          matrix.set(offset, center + 5);
+        }
+        if (modeMessage.get(27 - i)) {
+          matrix.set(center - 5, offset);
+        }
+      }
+    } else {
+      for (int i = 0; i < 10; i++) {
+        int offset = center - 5 + i + i / 5;
+        if (modeMessage.get(i)) {
+          matrix.set(offset, center - 7);
+        }
+        if (modeMessage.get(i + 10)) {
+          matrix.set(center + 7, offset);
+        }
+        if (modeMessage.get(29 - i)) {
+          matrix.set(offset, center + 7);
+        }
+        if (modeMessage.get(39 - i)) {
+          matrix.set(center - 7, offset);
+        }
+      }
+    }
+  }",234-269,0.9313475,0.8673497,0.8673497
+2,2,,10,10,0,com.google.zxing.aztec.encoder.Encoder,drawBullsEye,(Lcom/google/zxing/common/BitMatrix;II)V,13,13,100.0%,"private static void drawBullsEye(BitMatrix matrix, int center, int size) {
+    for (int i = 0; i < size; i += 2) {
+      for (int j = center - i; j <= center + i; j++) {
+        matrix.set(j, center - i);
+        matrix.set(j, center + i);
+        matrix.set(center - i, j);
+        matrix.set(center + i, j);
+      }
+    }
+    matrix.set(center - size, center - size);
+    matrix.set(center - size + 1, center - size);
+    matrix.set(center - size, center - size + 1);
+    matrix.set(center + size, center - size);
+    matrix.set(center + size, center - size + 1);
+    matrix.set(center + size, center + size - 1);
+  }",203-218,-0.11567038,-0.3193983,-0.3193983
+3,3,,6,6,0,com.google.zxing.common.reedsolomon.ReedSolomonEncoder,buildGenerator,(I)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,8,8,100.0%,"private GenericGFPoly buildGenerator(int degree) {
+    if (degree >= cachedGenerators.size()) {
+      GenericGFPoly lastGenerator = cachedGenerators.get(cachedGenerators.size() - 1);
+      for (int d = cachedGenerators.size(); d <= degree; d++) {
+        GenericGFPoly nextGenerator = lastGenerator.multiply(
+            new GenericGFPoly(field, new int[] { 1, field.exp(d - 1 + field.getGeneratorBase()) }));
+        cachedGenerators.add(nextGenerator);
+        lastGenerator = nextGenerator;
+      }
+    }
+    return cachedGenerators.get(degree);
+  }",39-50,0.98555976,0.96283627,0.96283627
+4,4,,5,5,0,com.google.zxing.aztec.decoder.Decoder,getEncodedData,([Z)Ljava/lang/String;,31,39,79.5%,"private static String getEncodedData(boolean[] correctedBits) {
+    int endIndex = correctedBits.length;
+    Table latchTable = Table.UPPER; // table most recently latched to
+    Table shiftTable = Table.UPPER; // table to use for the next read
+    StringBuilder result = new StringBuilder(20);
+    int index = 0;
+    while (index < endIndex) {
+      if (shiftTable == Table.BINARY) {
+        if (endIndex - index < 5) {
+          break;
+        }
+        int length = readCode(correctedBits, index, 5);
+        index += 5;
+        if (length == 0) {
+          if (endIndex - index < 11) {
+            break;
+          }
+          length = readCode(correctedBits, index, 11) + 31;
+          index += 11;
+        }
+        for (int charCount = 0; charCount < length; charCount++) {
+          if (endIndex - index < 8) {
+            index = endIndex;  // Force outer loop to exit
+            break;
+          }
+          int code = readCode(correctedBits, index, 8);
+          result.append((char) code);
+          index += 8;
+        }
+        // Go back to whatever mode we had been in
+        shiftTable = latchTable;
+      } else {
+        int size = shiftTable == Table.DIGIT ? 4 : 5;
+        if (endIndex - index < size) {
+          break;
+        }
+        int code = readCode(correctedBits, index, size);
+        index += size;
+        String str = getCharacter(shiftTable, code);
+        if (str.startsWith(""CTRL_"")) {
+          // Table changes
+          shiftTable = getTable(str.charAt(5));
+          if (str.charAt(6) == 'L') {
+            latchTable = shiftTable;
+          }
+        } else {
+          result.append(str);
+          // Go back to whatever mode we had been in
+          shiftTable = latchTable;
+        }
+      }
+    }
+    return result.toString();
+  }",92-145,0.9458325,0.88665533,0.88665533
+5,5,,4,4,0,com.google.zxing.aztec.decoder.Decoder,extractBits,(Lcom/google/zxing/common/BitMatrix;)[Z,32,32,100.0%,"boolean[] extractBits(BitMatrix matrix) {
+    boolean compact = ddata.isCompact();
+    int layers = ddata.getNbLayers();
+    int baseMatrixSize = compact ? 11 + layers * 4 : 14 + layers * 4; // not including alignment lines
+    int[] alignmentMap = new int[baseMatrixSize];
+    boolean[] rawbits = new boolean[totalBitsInLayer(layers, compact)];
+
+    if (compact) {
+      for (int i = 0; i < alignmentMap.length; i++) {
+        alignmentMap[i] = i;
+      }
+    } else {
+      int matrixSize = baseMatrixSize + 1 + 2 * ((baseMatrixSize / 2 - 1) / 15);
+      int origCenter = baseMatrixSize / 2;
+      int center = matrixSize / 2;
+      for (int i = 0; i < origCenter; i++) {
+        int newOffset = i + i / 15;
+        alignmentMap[origCenter - i - 1] = center - newOffset - 1;
+        alignmentMap[origCenter + i] = center + newOffset + 1;
+      }
+    }
+    for (int i = 0, rowOffset = 0; i < layers; i++) {
+      int rowSize = compact ? (layers - i) * 4 + 9 : (layers - i) * 4 + 12;
+      // The top-left most point of this layer is <low, low> (not including alignment lines)
+      int low = i * 2;
+      // The bottom-right most point of this layer is <high, high> (not including alignment lines)
+      int high = baseMatrixSize - 1 - low;
+      // We pull bits from the two 2 x rowSize columns and two rowSize x 2 rows
+      for (int j = 0; j < rowSize; j++) {
+        int columnOffset = j * 2;
+        for (int k = 0; k < 2; k++) {
+          // left column
+          rawbits[rowOffset + columnOffset + k] =
+              matrix.get(alignmentMap[low + k], alignmentMap[low + j]);
+          // bottom row
+          rawbits[rowOffset + 2 * rowSize + columnOffset + k] =
+              matrix.get(alignmentMap[low + j], alignmentMap[high - k]);
+          // right column
+          rawbits[rowOffset + 4 * rowSize + columnOffset + k] =
+              matrix.get(alignmentMap[high - k], alignmentMap[high - j]);
+          // top row
+          rawbits[rowOffset + 6 * rowSize + columnOffset + k] =
+              matrix.get(alignmentMap[high - j], alignmentMap[low + k]);
+        }
+      }
+      rowOffset += rowSize * 8;
+    }
+    return rawbits;
+  }",268-316,0.97519344,0.9462553,0.9462553
+6,6,,4,4,0,com.google.zxing.aztec.encoder.HighLevelEncoder,simplifyStates,(Ljava/lang/Iterable;)Ljava/util/Collection;,15,15,100.0%,"private static Collection<State> simplifyStates(Iterable<State> states) {
+    List<State> result = new LinkedList<State>();
+    for (State newState : states) {
+      boolean add = true;
+      for (Iterator<State> iterator = result.iterator(); iterator.hasNext(); ) {
+        State oldState = iterator.next();
+        if (oldState.isBetterThanOrEqualTo(newState)) {
+          add = false;
+          break;
+        }
+        if (newState.isBetterThanOrEqualTo(oldState)) {
+          iterator.remove();
+        }
+      }
+      if (add) {
+        result.add(newState);
+      }
+    }
+    return result;
+  }",286-305,0.9534964,0.89758873,0.89758873
+7,7,,3,3,0,com.google.zxing.aztec.encoder.HighLevelEncoder,updateStateForChar,(Lcom/google/zxing/aztec/encoder/State;ILjava/util/Collection;)V,18,18,100.0%,"private void updateStateForChar(State state, int index, Collection<State> result) {
+    char ch = (char) (text[index] & 0xFF);
+    boolean charInCurrentTable = CHAR_MAP[state.getMode()][ch] > 0;
+    State stateNoBinary = null;
+    for (int mode = 0; mode <= MODE_PUNCT; mode++) {
+      int charInMode = CHAR_MAP[mode][ch];
+      if (charInMode > 0) {
+        if (stateNoBinary == null) {
+          // Only create stateNoBinary the first time it's required.
+          stateNoBinary = state.endBinaryShift(index);
+        }
+        // Try generating the character by latching to its mode
+        if (!charInCurrentTable || mode == state.getMode() || mode == MODE_DIGIT) {
+          // If the character is in the current table, we don't want to latch to
+          // any other mode except possibly digit (which uses only 4 bits).  Any
+          // other latch would be equally successful *after* this character, and
+          // so wouldn't save any bits.
+          State latch_state = stateNoBinary.latchAndAppend(mode, charInMode);
+          result.add(latch_state);
+        }
+        // Try generating the character by switching to its mode.
+        if (!charInCurrentTable && SHIFT_TABLE[state.getMode()][mode] >= 0) {
+          // It never makes sense to temporarily shift to another mode if the
+          // character exists in the current mode.  That can never save bits.
+          State shift_state = stateNoBinary.shiftAndAppend(mode, charInMode);
+          result.add(shift_state);
+        }
+      }
+    }
+    if (state.getBinaryShiftByteCount() > 0 || CHAR_MAP[state.getMode()][ch] == 0) {
+      // It's never worthwhile to go into binary shift mode if you're not already
+      // in binary shift mode, and the character exists in your current mode.
+      // That can never save bits over just outputting the char in the current mode.
+      State binaryState = state.addBinaryShiftChar(index);
+      result.add(binaryState);
+    }
+  }",216-252,0.9767624,0.9715432,0.9715432
+8,8,,2,2,0,com.google.zxing.aztec.encoder.State,latchAndAppend,(II)Lcom/google/zxing/aztec/encoder/State;,9,9,100.0%,"State latchAndAppend(int mode, int value) {
+    //assert binaryShiftByteCount == 0;
+    int bitCount = this.bitCount;
+    Token token = this.token;
+    if (mode != this.mode) {
+      int latch = HighLevelEncoder.LATCH_TABLE[this.mode][mode];
+      token = token.add(latch & 0xFFFF, latch >> 16);
+      bitCount += latch >> 16;
+    }
+    int latchModeBitCount = mode == HighLevelEncoder.MODE_DIGIT ? 4 : 5;
+    token = token.add(value, latchModeBitCount);
+    return new State(token, mode, 0, bitCount + latchModeBitCount);
+  }",75-87,0.9778091,0.99339694,0.99339694
+9,9,,2,2,0,com.google.zxing.aztec.encoder.State,shiftAndAppend,(II)Lcom/google/zxing/aztec/encoder/State;,5,5,100.0%,"State shiftAndAppend(int mode, int value) {
+    //assert binaryShiftByteCount == 0 && this.mode != mode;
+    Token token = this.token;
+    int thisModeBitCount = this.mode == HighLevelEncoder.MODE_DIGIT ? 4 : 5;
+    // Shifts exist only to UPPER and PUNCT, both with tokens size 5.
+    token = token.add(HighLevelEncoder.SHIFT_TABLE[this.mode][mode], thisModeBitCount);
+    token = token.add(value, 5);
+    return new State(token, this.mode, 0, this.bitCount + thisModeBitCount + 5);
+  }",91-99,0.9503575,0.98850834,0.98850834
+10,10,,1,1,0,com.google.zxing.common.reedsolomon.GenericGFPoly,addOrSubtract,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,17,18,94.4%,"GenericGFPoly addOrSubtract(GenericGFPoly other) {
+    if (!field.equals(other.field)) {
+      throw new IllegalArgumentException(""GenericGFPolys do not have same GenericGF field"");
+    }
+    if (isZero()) {
+      return other;
+    }
+    if (other.isZero()) {
+      return this;
+    }
+
+    int[] smallerCoefficients = this.coefficients;
+    int[] largerCoefficients = other.coefficients;
+    if (smallerCoefficients.length > largerCoefficients.length) {
+      int[] temp = smallerCoefficients;
+      smallerCoefficients = largerCoefficients;
+      largerCoefficients = temp;
+    }
+    int[] sumDiff = new int[largerCoefficients.length];
+    int lengthDiff = largerCoefficients.length - smallerCoefficients.length;
+    // Copy high-order terms only found in higher-degree polynomial's coefficients
+    System.arraycopy(largerCoefficients, 0, sumDiff, 0, lengthDiff);
+
+    for (int i = lengthDiff; i < largerCoefficients.length; i++) {
+      sumDiff[i] = GenericGF.addOrSubtract(smallerCoefficients[i - lengthDiff], largerCoefficients[i]);
+    }
+
+    return new GenericGFPoly(field, sumDiff);
+  }",118-146,0.98316836,0.9652564,0.9652564
+11,,,1,1,0,com.google.zxing.aztec.encoder.Encoder,stuffBits,(Lcom/google/zxing/common/BitArray;I)Lcom/google/zxing/common/BitArray;,16,16,100.0%,"static BitArray stuffBits(BitArray bits, int wordSize) {
+    BitArray out = new BitArray();
+
+    int n = bits.getSize();
+    int mask = (1 << wordSize) - 2;
+    for (int i = 0; i < n; i += wordSize) {
+      int word = 0;
+      for (int j = 0; j < wordSize; j++) {
+        if (i + j >= n || bits.get(i + j)) {
+          word |= 1 << (wordSize - 1 - j);
+        }
+      }
+      if ((word & mask) == mask) {
+        out.appendBits(word & mask, wordSize);
+        i--;
+      } else if ((word & mask) == 0) {
+        out.appendBits(word | 1, wordSize);
+        i--;
+      } else {
+        out.appendBits(word, wordSize);
+      }
+    }
+    return out;
+  }",318-341,0.9784357,0.94014627,0.94014627
+12,,,1,1,0,com.google.zxing.aztec.AztecWriter,renderResult,(Lcom/google/zxing/aztec/encoder/AztecCode;II)Lcom/google/zxing/common/BitMatrix;,15,16,93.8%,"private static BitMatrix renderResult(AztecCode code, int width, int height) {
+    BitMatrix input = code.getMatrix();
+    if (input == null) {
+      throw new IllegalStateException();
+    }
+    int inputWidth = input.getWidth();
+    int inputHeight = input.getHeight();
+    int outputWidth = Math.max(width, inputWidth);
+    int outputHeight = Math.max(height, inputHeight);
+
+    int multiple = Math.min(outputWidth / inputWidth, outputHeight / inputHeight);
+    int leftPadding = (outputWidth - (inputWidth * multiple)) / 2;
+    int topPadding = (outputHeight - (inputHeight * multiple)) / 2;
+
+    BitMatrix output = new BitMatrix(outputWidth, outputHeight);
+
+    for (int inputY = 0, outputY = topPadding; inputY < inputHeight; inputY++, outputY += multiple) {
+      // Write the contents of this row of the barcode
+      for (int inputX = 0, outputX = leftPadding; inputX < inputWidth; inputX++, outputX += multiple) {
+        if (input.get(inputX, inputY)) {
+          output.setRegion(outputX, outputY, multiple, multiple);
+        }
+      }
+    }
+    return output;
+  }",62-87,0.97290844,0.931962,0.931962
+13,,,1,1,0,com.google.zxing.common.reedsolomon.GenericGFPoly,divide,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;)[Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,15,17,88.2%,"GenericGFPoly[] divide(GenericGFPoly other) {
+    if (!field.equals(other.field)) {
+      throw new IllegalArgumentException(""GenericGFPolys do not have same GenericGF field"");
+    }
+    if (other.isZero()) {
+      throw new IllegalArgumentException(""Divide by 0"");
+    }
+
+    GenericGFPoly quotient = field.getZero();
+    GenericGFPoly remainder = this;
+
+    int denominatorLeadingTerm = other.getCoefficient(other.getDegree());
+    int inverseDenominatorLeadingTerm = field.inverse(denominatorLeadingTerm);
+
+    while (remainder.getDegree() >= other.getDegree() && !remainder.isZero()) {
+      int degreeDifference = remainder.getDegree() - other.getDegree();
+      int scale = field.multiply(remainder.getCoefficient(remainder.getDegree()), inverseDenominatorLeadingTerm);
+      GenericGFPoly term = other.multiplyByMonomial(degreeDifference, scale);
+      GenericGFPoly iterationQuotient = field.buildMonomial(degreeDifference, scale);
+      quotient = quotient.addOrSubtract(iterationQuotient);
+      remainder = remainder.addOrSubtract(term);
+    }
+
+    return new GenericGFPoly[] { quotient, remainder };
+  }",200-224,0.9859846,0.97564465,0.97564465
+14,,,1,1,0,com.google.zxing.common.reedsolomon.GenericGFPoly,multiply,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,13,15,86.7%,"GenericGFPoly multiply(GenericGFPoly other) {
+    if (!field.equals(other.field)) {
+      throw new IllegalArgumentException(""GenericGFPolys do not have same GenericGF field"");
+    }
+    if (isZero() || other.isZero()) {
+      return field.getZero();
+    }
+    int[] aCoefficients = this.coefficients;
+    int aLength = aCoefficients.length;
+    int[] bCoefficients = other.coefficients;
+    int bLength = bCoefficients.length;
+    int[] product = new int[aLength + bLength - 1];
+    for (int i = 0; i < aLength; i++) {
+      int aCoeff = aCoefficients[i];
+      for (int j = 0; j < bLength; j++) {
+        product[i + j] = GenericGF.addOrSubtract(product[i + j],
+            field.multiply(aCoeff, bCoefficients[j]));
+      }
+    }
+    return new GenericGFPoly(field, product);
+  }",148-168,0.98788637,0.97532773,0.97532773
+15,,,1,1,0,com.google.zxing.aztec.encoder.State,addBinaryShiftChar,(I)Lcom/google/zxing/aztec/encoder/State;,12,13,92.3%,"State addBinaryShiftChar(int index) {
+    Token token = this.token;
+    int mode = this.mode;
+    int bitCount = this.bitCount;
+    if (this.mode == HighLevelEncoder.MODE_PUNCT || this.mode == HighLevelEncoder.MODE_DIGIT)  {
+      //assert binaryShiftByteCount == 0;
+      int latch = HighLevelEncoder.LATCH_TABLE[mode][HighLevelEncoder.MODE_UPPER];
+      token = token.add(latch & 0xFFFF, latch >> 16);
+      bitCount += latch >> 16;
+      mode = HighLevelEncoder.MODE_UPPER;
+    }
+    int deltaBitCount =
+      (binaryShiftByteCount == 0 || binaryShiftByteCount == 31) ? 18 :
+      (binaryShiftByteCount == 62) ? 9 : 8;
+    State result = new State(token, mode, binaryShiftByteCount + 1, bitCount + deltaBitCount);
+    if (result.binaryShiftByteCount == 2047 + 31) {
+      // The string is as long as it's allowed to be.  We should end it.
+      result = result.endBinaryShift(index + 1);
+    }
+    return result;
+  }",103-123,0.9863859,0.9833763,0.9833763
+16,,,1,1,0,com.google.zxing.aztec.encoder.HighLevelEncoder,encode,()Lcom/google/zxing/common/BitArray;,11,19,57.9%,"public BitArray encode() {
+    Collection<State> states = Collections.singletonList(State.INITIAL_STATE);
+    for (int index = 0; index < text.length; index++) {
+      int pairCode;
+      int nextChar = index + 1 < text.length ? text[index + 1] : 0;
+      switch (text[index]) {
+        case '\r':  
+          pairCode = nextChar == '\n' ? 2 : 0; 
+          break;
+        case '.' :  
+          pairCode = nextChar == ' '  ? 3 : 0; 
+          break;
+        case ',' :  
+          pairCode = nextChar == ' ' ? 4 : 0; 
+          break;
+        case ':' :  
+          pairCode = nextChar == ' ' ? 5 : 0; 
+          break;
+        default:    
+          pairCode = 0;
+      }
+      if (pairCode > 0) {
+        // We have one of the four special PUNCT pairs.  Treat them specially.
+        // Get a new set of states for the two new characters.
+        states = updateStateListForPair(states, index, pairCode);
+        index++;
+      } else {
+        // Get a new set of states for the new character.
+        states = updateStateListForChar(states, index);
+      }
+    }
+    // We are left with a set of states.  Find the shortest one.
+    State minState = Collections.min(states, new Comparator<State>() {
+      @Override
+      public int compare(State a, State b) {
+        return a.getBitCount() - b.getBitCount();
+      }
+    });
+    // Convert it to a bit array, and return.
+    return minState.toBitArray(text);
+  }",160-200,0.9730518,0.9391979,0.9391979
+17,,,1,1,0,com.google.zxing.aztec.encoder.State,toBitArray,([B)Lcom/google/zxing/common/BitArray;,8,8,100.0%,"BitArray toBitArray(byte[] text) {
+    // Reverse the tokens, so that they are in the order that they should
+    // be output
+    Deque<Token> symbols = new LinkedList<Token>();
+    for (Token token = endBinaryShift(text.length).token; token != null; token = token.getPrevious()) {
+      symbols.addFirst(token);
+    }
+    BitArray bitArray = new BitArray();
+    // Add each token to the result.
+    for (Token symbol : symbols) {
+      symbol.appendTo(bitArray, text);
+    }
+    //assert bitArray.getSize() == this.bitCount;
+    return bitArray;
+  }",148-162,0.9737826,0.9818068,0.9818068
+18,,,1,1,0,com.google.zxing.aztec.encoder.Encoder,bitsToWords,(Lcom/google/zxing/common/BitArray;II)[I,7,7,100.0%,"private static int[] bitsToWords(BitArray stuffedBits, int wordSize, int totalWords) {
+    int[] message = new int[totalWords];
+    int i;
+    int n;
+    for (i = 0, n = stuffedBits.getSize() / wordSize; i < n; i++) {
+      int value = 0;
+      for (int j = 0; j < wordSize; j++) {
+        value |= stuffedBits.get(i * wordSize + j) ? (1 << wordSize - j - 1) : 0;
+      }
+      message[i] = value;
+    }
+    return message;
+  }",287-299,0.9680012,0.9336998,0.9336998
+19,,,1,1,0,com.google.zxing.common.reedsolomon.GenericGF,<init>,(III)V,7,8,87.5%,"public GenericGF(int primitive, int size, int b) {
+  	this.primitive = primitive;
+    this.size = size;
+    this.generatorBase = b;
+    
+    if (size <= INITIALIZATION_THRESHOLD) {
+    	initialize();
+    }
+  }",63-71,0.9312888,0.9713866,0.9713866
+20,,overload of an earlier row - skipped,1,1,0,com.google.zxing.common.reedsolomon.GenericGFPoly,multiply,(I)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,7,9,77.8%,"GenericGFPoly multiply(GenericGFPoly other) {
+    if (!field.equals(other.field)) {
+      throw new IllegalArgumentException(""GenericGFPolys do not have same GenericGF field"");
+    }
+    if (isZero() || other.isZero()) {
+      return field.getZero();
+    }
+    int[] aCoefficients = this.coefficients;
+    int aLength = aCoefficients.length;
+    int[] bCoefficients = other.coefficients;
+    int bLength = bCoefficients.length;
+    int[] product = new int[aLength + bLength - 1];
+    for (int i = 0; i < aLength; i++) {
+      int aCoeff = aCoefficients[i];
+      for (int j = 0; j < bLength; j++) {
+        product[i + j] = GenericGF.addOrSubtract(product[i + j],
+            field.multiply(aCoeff, bCoefficients[j]));
+      }
+    }
+    return new GenericGFPoly(field, product);
+  }",148-168,0.98788637,0.97532773,0.97532773
+21,,,1,1,0,com.google.zxing.common.reedsolomon.ReedSolomonEncoder,<init>,(Lcom/google/zxing/common/reedsolomon/GenericGF;)V,5,5,100.0%,"public ReedSolomonEncoder(GenericGF field) {
+    this.field = field;
+    this.cachedGenerators = new ArrayList<GenericGFPoly>();
+    cachedGenerators.add(new GenericGFPoly(field, new int[]{1}));
+  }",33-37,0.94112766,0.9867655,0.9867655
+22,,,1,1,0,com.google.zxing.common.reedsolomon.GenericGF,checkInit,()V,3,3,100.0%,"private void checkInit() {
+  	if (!initialized) {
+      initialize();
+    }
+  }",94-98,0.9182729,0.9788026,0.9788026
+23,,,0,0,0,com.google.zxing.aztec.encoder.Encoder,encode,([BII)Lcom/google/zxing/aztec/encoder/AztecCode;,68,84,81.0%,"public static AztecCode encode(byte[] data) {
+    return encode(data, DEFAULT_EC_PERCENT, DEFAULT_AZTEC_LAYERS);
+  }",50-52,0.9509624,0.99158853,0.99158853
+24,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,correctBits,([Z)[Z,33,41,80.5%,"private boolean[] correctBits(boolean[] rawbits) throws FormatException {
+    GenericGF gf;
+    int codewordSize;
+
+    if (ddata.getNbLayers() <= 2) {
+      codewordSize = 6;
+      gf = GenericGF.AZTEC_DATA_6;
+    } else if (ddata.getNbLayers() <= 8) {
+      codewordSize = 8;
+      gf = GenericGF.AZTEC_DATA_8;
+    } else if (ddata.getNbLayers() <= 22) {
+      codewordSize = 10;
+      gf = GenericGF.AZTEC_DATA_10;
+    } else {
+      codewordSize = 12;
+      gf = GenericGF.AZTEC_DATA_12;
+    }
+
+    int numDataCodewords = ddata.getNbDatablocks();
+    int numCodewords = rawbits.length / codewordSize;
+    int offset = rawbits.length % codewordSize;
+    int numECCodewords = numCodewords - numDataCodewords;
+
+    int[] dataWords = new int[numCodewords];
+    for (int i = 0; i < numCodewords; i++, offset += codewordSize) {
+      dataWords[i] = readCode(rawbits, offset, codewordSize);
+    }
+
+    try {
+      ReedSolomonDecoder rsDecoder = new ReedSolomonDecoder(gf);
+      rsDecoder.decode(dataWords, numECCodewords);
+    } catch (ReedSolomonException ignored) {
+      throw FormatException.getFormatInstance();
+    }
+
+    // Now perform the unstuffing operation.
+    // First, count how many bits are going to be thrown out as stuffing
+    int mask = (1 << codewordSize) - 1;
+    int stuffedBits = 0;
+    for (int i = 0; i < numDataCodewords; i++) {
+      int dataWord = dataWords[i];
+      if (dataWord == 0 || dataWord == mask) {
+        throw FormatException.getFormatInstance();
+      } else if (dataWord == 1 || dataWord == mask - 1) {
+        stuffedBits++;
+      }
+    }
+    // Now, actually unpack the bits and remove the stuffing
+    boolean[] correctedBits = new boolean[numDataCodewords * codewordSize - stuffedBits];
+    int index = 0;
+    for (int i = 0; i < numDataCodewords; i++) {
+      int dataWord = dataWords[i];
+      if (dataWord == 1 || dataWord == mask - 1) {
+        // next codewordSize-1 bits are all zeros or all ones
+        Arrays.fill(correctedBits, index, index + codewordSize - 1, dataWord > 1);
+        index += codewordSize - 1;
+      } else {
+        for (int bit = codewordSize - 1; bit >= 0; --bit) {
+          correctedBits[index++] = (dataWord & (1 << bit)) != 0;
+        }
+      }
+    }
+    return correctedBits;
+  }",198-261,0.97409964,0.93831074,0.93831074
+25,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonDecoder,runEuclideanAlgorithm,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;Lcom/google/zxing/common/reedsolomon/GenericGFPoly;I)[Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,30,36,83.3%,"private GenericGFPoly[] runEuclideanAlgorithm(GenericGFPoly a, GenericGFPoly b, int R)
+      throws ReedSolomonException {
+    // Assume a's degree is >= b's
+    if (a.getDegree() < b.getDegree()) {
+      GenericGFPoly temp = a;
+      a = b;
+      b = temp;
+    }
+
+    GenericGFPoly rLast = a;
+    GenericGFPoly r = b;
+    GenericGFPoly tLast = field.getZero();
+    GenericGFPoly t = field.getOne();
+
+    // Run Euclidean algorithm until r's degree is less than R/2
+    while (r.getDegree() >= R / 2) {
+      GenericGFPoly rLastLast = rLast;
+      GenericGFPoly tLastLast = tLast;
+      rLast = r;
+      tLast = t;
+
+      // Divide rLastLast by rLast, with quotient in q and remainder in r
+      if (rLast.isZero()) {
+        // Oops, Euclidean algorithm already terminated?
+        throw new ReedSolomonException(""r_{i-1} was zero"");
+      }
+      r = rLastLast;
+      GenericGFPoly q = field.getZero();
+      int denominatorLeadingTerm = rLast.getCoefficient(rLast.getDegree());
+      int dltInverse = field.inverse(denominatorLeadingTerm);
+      while (r.getDegree() >= rLast.getDegree() && !r.isZero()) {
+        int degreeDiff = r.getDegree() - rLast.getDegree();
+        int scale = field.multiply(r.getCoefficient(r.getDegree()), dltInverse);
+        q = q.addOrSubtract(field.buildMonomial(degreeDiff, scale));
+        r = r.addOrSubtract(rLast.multiplyByMonomial(degreeDiff, scale));
+      }
+
+      t = q.multiply(tLast).addOrSubtract(tLastLast);
+      
+      if (r.getDegree() >= rLast.getDegree()) {
+        throw new IllegalStateException(""Division algorithm failed to reduce polynomial?"");
+      }
+    }
+
+    int sigmaTildeAtZero = t.getCoefficient(0);
+    if (sigmaTildeAtZero == 0) {
+      throw new ReedSolomonException(""sigmaTilde(0) was zero"");
+    }
+
+    int inverse = field.inverse(sigmaTildeAtZero);
+    GenericGFPoly sigma = t.multiply(inverse);
+    GenericGFPoly omega = r.multiply(inverse);
+    return new GenericGFPoly[]{sigma, omega};
+  }",88-141,0.9853462,0.968637,0.968637
+26,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonDecoder,decode,([II)V,22,23,95.7%,"public void decode(int[] received, int twoS) throws ReedSolomonException {
+    GenericGFPoly poly = new GenericGFPoly(field, received);
+    int[] syndromeCoefficients = new int[twoS];
+    boolean noError = true;
+    for (int i = 0; i < twoS; i++) {
+      int eval = poly.evaluateAt(field.exp(i + field.getGeneratorBase()));
+      syndromeCoefficients[syndromeCoefficients.length - 1 - i] = eval;
+      if (eval != 0) {
+        noError = false;
+      }
+    }
+    if (noError) {
+      return;
+    }
+    GenericGFPoly syndrome = new GenericGFPoly(field, syndromeCoefficients);
+    GenericGFPoly[] sigmaOmega =
+        runEuclideanAlgorithm(field.buildMonomial(twoS, 1), syndrome, twoS);
+    GenericGFPoly sigma = sigmaOmega[0];
+    GenericGFPoly omega = sigmaOmega[1];
+    int[] errorLocations = findErrorLocations(sigma);
+    int[] errorMagnitudes = findErrorMagnitudes(omega, errorLocations);
+    for (int i = 0; i < errorLocations.length; i++) {
+      int position = received.length - 1 - field.log(errorLocations[i]);
+      if (position < 0) {
+        throw new ReedSolomonException(""Bad error location"");
+      }
+      received[position] = GenericGF.addOrSubtract(received[position], errorMagnitudes[i]);
+    }
+  }",58-86,0.9826075,0.9623208,0.9623208
+27,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,initialize,()V,15,15,100.0%,"private void initialize() {
+    expTable = new int[size];
+    logTable = new int[size];
+    int x = 1;
+    for (int i = 0; i < size; i++) {
+      expTable[i] = x;
+      x <<= 1; // x = x * 2; we're assuming the generator alpha is 2
+      if (x >= size) {
+        x ^= primitive;
+        x &= size-1;
+      }
+    }
+    for (int i = 0; i < size-1; i++) {
+      logTable[expTable[i]] = i;
+    }
+    // logTable[0] == 0 but this should never be used
+    zero = new GenericGFPoly(this, new int[]{0});
+    one = new GenericGFPoly(this, new int[]{1});
+    initialized = true;
+  }",73-92,0.98277044,0.9746028,0.9746028
+28,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonDecoder,findErrorMagnitudes,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;[I)[I,15,15,100.0%,"private int[] findErrorMagnitudes(GenericGFPoly errorEvaluator, int[] errorLocations) {
+    // This is directly applying Forney's Formula
+    int s = errorLocations.length;
+    int[] result = new int[s];
+    for (int i = 0; i < s; i++) {
+      int xiInverse = field.inverse(errorLocations[i]);
+      int denominator = 1;
+      for (int j = 0; j < s; j++) {
+        if (i != j) {
+          //denominator = field.multiply(denominator,
+          //    GenericGF.addOrSubtract(1, field.multiply(errorLocations[j], xiInverse)));
+          // Above should work but fails on some Apple and Linux JDKs due to a Hotspot bug.
+          // Below is a funny-looking workaround from Steven Parkes
+          int term = field.multiply(errorLocations[j], xiInverse);
+          int termPlus1 = (term & 0x1) == 0 ? term | 1 : term & ~1;
+          denominator = field.multiply(denominator, termPlus1);
+        }
+      }
+      result[i] = field.multiply(errorEvaluator.evaluateAt(xiInverse),
+          field.inverse(denominator));
+      if (field.getGeneratorBase() != 0) {
+        result[i] = field.multiply(result[i], xiInverse);
+      }
+    }
+    return result;
+  }",163-188,0.98573923,0.97558504,0.97558504
+29,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonEncoder,encode,([II)V,15,17,88.2%,"public void encode(int[] toEncode, int ecBytes) {
+    if (ecBytes == 0) {
+      throw new IllegalArgumentException(""No error correction bytes"");
+    }
+    int dataBytes = toEncode.length - ecBytes;
+    if (dataBytes <= 0) {
+      throw new IllegalArgumentException(""No data bytes provided"");
+    }
+    GenericGFPoly generator = buildGenerator(ecBytes);
+    int[] infoCoefficients = new int[dataBytes];
+    System.arraycopy(toEncode, 0, infoCoefficients, 0, dataBytes);
+    GenericGFPoly info = new GenericGFPoly(field, infoCoefficients);
+    info = info.multiplyByMonomial(ecBytes, 1);
+    GenericGFPoly remainder = info.divide(generator)[1];
+    int[] coefficients = remainder.getCoefficients();
+    int numZeroCoefficients = ecBytes - coefficients.length;
+    for (int i = 0; i < numZeroCoefficients; i++) {
+      toEncode[dataBytes + i] = 0;
+    }
+    System.arraycopy(coefficients, 0, toEncode, dataBytes + numZeroCoefficients, coefficients.length);
+  }",52-72,0.9880495,0.97146493,0.97146493
+30,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,<init>,(Lcom/google/zxing/common/reedsolomon/GenericGF;[I)V,14,16,87.5%,"GenericGFPoly(GenericGF field, int[] coefficients) {
+    if (coefficients.length == 0) {
+      throw new IllegalArgumentException();
+    }
+    this.field = field;
+    int coefficientsLength = coefficients.length;
+    if (coefficientsLength > 1 && coefficients[0] == 0) {
+      // Leading term must be non-zero for anything except the constant polynomial ""0""
+      int firstNonZero = 1;
+      while (firstNonZero < coefficientsLength && coefficients[firstNonZero] == 0) {
+        firstNonZero++;
+      }
+      if (firstNonZero == coefficientsLength) {
+        this.coefficients = field.getZero().coefficients;
+      } else {
+        this.coefficients = new int[coefficientsLength - firstNonZero];
+        System.arraycopy(coefficients,
+            firstNonZero,
+            this.coefficients,
+            0,
+            this.coefficients.length);
+      }
+    } else {
+      this.coefficients = coefficients;
+    }
+  }",42-67,0.9788698,0.9537008,0.9537008
+31,,,0,0,0,com.google.zxing.aztec.encoder.Encoder,generateCheckWords,(Lcom/google/zxing/common/BitArray;II)Lcom/google/zxing/common/BitArray;,11,11,100.0%,"private static BitArray generateCheckWords(BitArray bitArray, int totalBits, int wordSize) {
+    // bitArray is guaranteed to be a multiple of the wordSize, so no padding needed
+    int messageSizeInWords = bitArray.getSize() / wordSize;
+    ReedSolomonEncoder rs = new ReedSolomonEncoder(getGF(wordSize));
+    int totalWords = totalBits / wordSize;
+    int[] messageWords = bitsToWords(bitArray, wordSize, totalWords);
+    rs.encode(messageWords, totalWords - messageSizeInWords);
+    int startPad = totalBits % wordSize;
+    BitArray messageBits = new BitArray();
+    messageBits.appendBits(0, startPad);
+    for (int messageWord : messageWords) {
+      messageBits.appendBits(messageWord, wordSize);
+    }
+    return messageBits;
+  }",271-285,0.9798649,0.9836263,0.9836263
+32,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,evaluateAt,(I)I,11,12,91.7%,"int evaluateAt(int a) {
+    if (a == 0) {
+      // Just return the x^0 coefficient
+      return getCoefficient(0);
+    }
+    int size = coefficients.length;
+    if (a == 1) {
+      // Just the sum of the coefficients
+      int result = 0;
+      for (int coefficient : coefficients) {
+        result = GenericGF.addOrSubtract(result, coefficient);
+      }
+      return result;
+    }
+    int result = coefficients[0];
+    for (int i = 1; i < size; i++) {
+      result = GenericGF.addOrSubtract(field.multiply(a, result), coefficients[i]);
+    }
+    return result;
+  }",97-116,0.98688143,0.9652167,0.9652167
+33,,,0,0,0,com.google.zxing.common.BitMatrix,setRegion,(IIII)V,10,13,76.9%,"public void setRegion(int left, int top, int width, int height) {
+    if (top < 0 || left < 0) {
+      throw new IllegalArgumentException(""Left and top must be nonnegative"");
+    }
+    if (height < 1 || width < 1) {
+      throw new IllegalArgumentException(""Height and width must be at least 1"");
+    }
+    int right = left + width;
+    int bottom = top + height;
+    if (bottom > this.height || right > this.width) {
+      throw new IllegalArgumentException(""The region must fit inside the matrix"");
+    }
+    for (int y = top; y < bottom; y++) {
+      int offset = y * rowSize;
+      for (int x = left; x < right; x++) {
+        bits[offset + (x >> 5)] |= 1 << (x & 0x1f);
+      }
+    }
+  }",108-126,0.9416362,0.8827604,0.8827604
+34,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonDecoder,findErrorLocations,(Lcom/google/zxing/common/reedsolomon/GenericGFPoly;)[I,10,12,83.3%,"private int[] findErrorLocations(GenericGFPoly errorLocator) throws ReedSolomonException {
+    // This is a direct application of Chien's search
+    int numErrors = errorLocator.getDegree();
+    if (numErrors == 1) { // shortcut
+      return new int[] { errorLocator.getCoefficient(1) };
+    }
+    int[] result = new int[numErrors];
+    int e = 0;
+    for (int i = 1; i < field.getSize() && e < numErrors; i++) {
+      if (errorLocator.evaluateAt(i) == 0) {
+        result[e] = field.inverse(i);
+        e++;
+      }
+    }
+    if (e != numErrors) {
+      throw new ReedSolomonException(""Error locator degree does not match number of roots"");
+    }
+    return result;
+  }",143-161,0.98663044,0.9778104,0.9778104
+35,,,0,0,0,com.google.zxing.aztec.encoder.Encoder,generateModeMessage,(ZII)Lcom/google/zxing/common/BitArray;,9,9,100.0%,"static BitArray generateModeMessage(boolean compact, int layers, int messageSizeInWords) {
+    BitArray modeMessage = new BitArray();
+    if (compact) {
+      modeMessage.appendBits(layers - 1, 2);
+      modeMessage.appendBits(messageSizeInWords - 1, 6);
+      modeMessage = generateCheckWords(modeMessage, 28, 4);
+    } else {
+      modeMessage.appendBits(layers - 1, 5);
+      modeMessage.appendBits(messageSizeInWords - 1, 11);
+      modeMessage = generateCheckWords(modeMessage, 40, 4);
+    }
+    return modeMessage;
+  }",220-232,0.96438813,0.8990589,0.8990589
+36,,,0,0,0,com.google.zxing.aztec.encoder.BinaryShiftToken,appendTo,(Lcom/google/zxing/common/BitArray;[B)V,8,10,80.0%,"@Override
+  public void appendTo(BitArray bitArray, byte[] text) {
+    for (int i = 0; i < binaryShiftByteCount; i++) {
+      if (i == 0 || (i == 31 && binaryShiftByteCount <= 62))  {
+        // We need a header before the first character, and before
+        // character 31 when the total byte code is <= 62
+        bitArray.appendBits(31, 5);  // BINARY_SHIFT
+        if (binaryShiftByteCount > 62) {
+          bitArray.appendBits(binaryShiftByteCount - 31, 16);
+        } else if (i == 0) {
+          // 1 <= binaryShiftByteCode <= 62
+          bitArray.appendBits(Math.min(binaryShiftByteCount, 31), 5);
+        } else {
+          // 32 <= binaryShiftCount <= 62 and i == 31
+          bitArray.appendBits(binaryShiftByteCount - 31, 5);
+        }
+      }
+      bitArray.appendBits(text[binaryShiftStart + i], 8);
+    }
+  }",34-53,0.98434716,0.9710657,0.9710657
+37,,,0,0,0,com.google.zxing.common.BitMatrix,<init>,(II)V,7,8,87.5%,"public BitMatrix(int dimension) {
+    this(dimension, dimension);
+  }",42-44,0.92072505,0.98012877,0.98012877
+38,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,multiplyByMonomial,(II)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,7,9,77.8%,"GenericGFPoly multiplyByMonomial(int degree, int coefficient) {
+    if (degree < 0) {
+      throw new IllegalArgumentException();
+    }
+    if (coefficient == 0) {
+      return field.getZero();
+    }
+    int size = coefficients.length;
+    int[] product = new int[size + degree];
+    for (int i = 0; i < size; i++) {
+      product[i] = field.multiply(coefficients[i], coefficient);
+    }
+    return new GenericGFPoly(field, product);
+  }",185-198,0.9838146,0.9523941,0.9523941
+39,,,0,0,0,com.google.zxing.aztec.AztecWriter,encode,(Ljava/lang/String;Lcom/google/zxing/BarcodeFormat;IILjava/util/Map;)Lcom/google/zxing/common/BitMatrix;,6,7,85.7%,"@Override
+  public BitMatrix encode(String contents, BarcodeFormat format, int width, int height) {
+    return encode(contents, format, width, height, null);
+  }",33-36,0.9319833,0.9804613,0.9804613
+40,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,decode,(Lcom/google/zxing/aztec/AztecDetectorResult;)Lcom/google/zxing/common/DecoderResult;,6,6,100.0%,"public DecoderResult decode(AztecDetectorResult detectorResult) throws FormatException {
+    ddata = detectorResult;
+    BitMatrix matrix = detectorResult.getBits();
+    boolean[] rawbits = extractBits(matrix);
+    boolean[] correctedBits = correctBits(rawbits);
+    String result = getEncodedData(correctedBits);
+    return new DecoderResult(null, result, null, null);
+  }",73-80,0.9772649,0.98812413,0.98812413
+41,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,getTable,(C)Lcom/google/zxing/aztec/decoder/Decoder$Table;,6,7,85.7%,"private static Table getTable(char t) {
+    switch (t) {
+      case 'L':
+        return Table.LOWER;
+      case 'P':
+        return Table.PUNCT;
+      case 'M':
+        return Table.MIXED;
+      case 'D':
+        return Table.DIGIT;
+      case 'B':
+        return Table.BINARY;
+      case 'U':
+      default:
+        return Table.UPPER;
+    }
+  }",150-166,0.9617364,0.91276705,0.91276705
+42,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,readCode,([ZII)I,6,6,100.0%,"private static int readCode(boolean[] rawbits, int startIndex, int length) {
+    int res = 0;
+    for (int i = startIndex; i < startIndex + length; i++) {
+      res <<= 1;
+      if (rawbits[i]) {
+        res++;
+      }
+    }
+    return res;
+  }",321-330,0.9748763,0.9728374,0.9728374
+43,,,0,0,0,com.google.zxing.aztec.encoder.State,<init>,(Lcom/google/zxing/aztec/encoder/Token;III)V,6,6,100.0%,"private State(Token token, int mode, int binaryBytes, int bitCount) {
+    this.token = token;
+    this.mode = mode;
+    this.binaryShiftByteCount = binaryBytes;
+    this.bitCount = bitCount;
+    // Make sure we match the token
+    //int binaryShiftBitCount = (binaryShiftByteCount * 8) +
+    //    (binaryShiftByteCount == 0 ? 0 :
+    //     binaryShiftByteCount <= 31 ? 10 :
+    //     binaryShiftByteCount <= 62 ? 20 : 21);
+    //assert this.bitCount == token.getTotalBitCount() + binaryShiftBitCount;
+  }",44-55,0.97928154,0.99002725,0.99002725
+44,,,0,0,0,com.google.zxing.common.BitMatrix,equals,(Ljava/lang/Object;)Z,6,9,66.7%,"@Override
+  public boolean equals(Object o) {
+    if (!(o instanceof BitMatrix)) {
+      return false;
+    }
+    BitMatrix other = (BitMatrix) o;
+    if (width != other.width || height != other.height ||
+        rowSize != other.rowSize || bits.length != other.bits.length) {
+      return false;
+    }
+    for (int i = 0; i < bits.length; i++) {
+      if (bits[i] != other.bits[i]) {
+        return false;
+      }
+    }
+    return true;
+  }",269-285,0.79643136,0.6657938,0.6657938
+45,,,0,0,0,com.google.zxing.common.DecoderResult,<init>,([BLjava/lang/String;Ljava/util/List;Ljava/lang/String;)V,6,6,100.0%,"public DecoderResult(byte[] rawBytes,
+                       String text,
+                       List<byte[]> byteSegments,
+                       String ecLevel) {
+    this.rawBytes = rawBytes;
+    this.text = text;
+    this.byteSegments = byteSegments;
+    this.ecLevel = ecLevel;
+  }",38-46,0.95305187,0.9006756,0.9006756
+46,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,buildMonomial,(II)Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,6,8,75.0%,"GenericGFPoly buildMonomial(int degree, int coefficient) {
+  	checkInit();
+  	
+    if (degree < 0) {
+      throw new IllegalArgumentException();
+    }
+    if (coefficient == 0) {
+      return zero;
+    }
+    int[] coefficients = new int[degree + 1];
+    coefficients[0] = coefficient;
+    return new GenericGFPoly(this, coefficients);
+  }",115-127,0.9272115,0.961116,0.961116
+47,,,0,0,0,com.google.zxing.aztec.AztecDetectorResult,<init>,(Lcom/google/zxing/common/BitMatrix;[Lcom/google/zxing/ResultPoint;ZII)V,5,5,100.0%,"public AztecDetectorResult(BitMatrix bits,
+                             ResultPoint[] points,
+                             boolean compact,
+                             int nbDatablocks,
+                             int nbLayers) {
+    super(bits, points);
+    this.compact = compact;
+    this.nbDatablocks = nbDatablocks;
+    this.nbLayers = nbLayers;
+  }",29-38,0.96399206,0.9259114,0.9259114
+48,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,getCharacter,(Lcom/google/zxing/aztec/decoder/Decoder$Table;I)Ljava/lang/String;,5,7,71.4%,"private static String getCharacter(Table table, int code) {
+    switch (table) {
+      case UPPER:
+        return UPPER_TABLE[code];
+      case LOWER:
+        return LOWER_TABLE[code];
+      case MIXED:
+        return MIXED_TABLE[code];
+      case PUNCT:
+        return PUNCT_TABLE[code];
+      case DIGIT:
+        return DIGIT_TABLE[code];
+      default:
+        // Should not reach here.
+        throw new IllegalStateException(""Bad table"");
+    }
+  }",174-190,0.96736073,0.9253417,0.9253417
+49,,,0,0,0,com.google.zxing.aztec.encoder.HighLevelEncoder,updateStateListForChar,(Ljava/lang/Iterable;I)Ljava/util/Collection;,5,5,100.0%,"private Collection<State> updateStateListForChar(Iterable<State> states, int index) {
+    Collection<State> result = new LinkedList<State>();
+    for (State state : states) {
+      updateStateForChar(state, index, result);
+    }
+    return simplifyStates(result);
+  }",205-211,0.80484915,0.79969525,0.79969525
+50,,,0,0,0,com.google.zxing.aztec.encoder.State,endBinaryShift,(I)Lcom/google/zxing/aztec/encoder/State;,5,5,100.0%,"State endBinaryShift(int index) {
+    if (binaryShiftByteCount == 0) {
+      return this;
+    }
+    Token token = this.token;
+    token = token.addBinaryShift(index - binaryShiftByteCount, binaryShiftByteCount);
+    //assert token.getTotalBitCount() == this.bitCount;
+    return new State(token, mode, 0, this.bitCount);
+  }",127-135,0.95985514,0.9884039,0.9884039
+51,,,0,0,0,com.google.zxing.common.BitArray,appendBit,(Z)V,5,5,100.0%,"public void appendBit(boolean bit) {
+    ensureCapacity(size + 1);
+    if (bit) {
+      bits[size / 32] |= 1 << (size & 0x1F);
+    }
+    size++;
+  }",226-232,0.9307757,0.9784483,0.9784483
+52,,,0,0,0,com.google.zxing.common.BitArray,appendBits,(II)V,5,6,83.3%,"public void appendBits(int value, int numBits) {
+    if (numBits < 0 || numBits > 32) {
+      throw new IllegalArgumentException(""Num bits must be between 0 and 32"");
+    }
+    ensureCapacity(size + numBits);
+    for (int numBitsLeft = numBits; numBitsLeft > 0; numBitsLeft--) {
+      appendBit(((value >> (numBitsLeft - 1)) & 0x01) == 1);
+    }
+  }",239-247,0.98403025,0.98877794,0.98877794
+53,,,0,0,0,com.google.zxing.common.BitArray,ensureCapacity,(I)V,5,5,100.0%,"private void ensureCapacity(int size) {
+    if (size > bits.length * 32) {
+      int[] newBits = makeArray(size);
+      System.arraycopy(bits, 0, newBits, 0, bits.length);
+      this.bits = newBits;
+    }
+  }",53-59,0.97654766,0.9912462,0.9912462
+54,,,0,0,0,com.google.zxing.aztec.encoder.BinaryShiftToken,<init>,(Lcom/google/zxing/aztec/encoder/Token;II)V,4,4,100.0%,"BinaryShiftToken(Token previous,
+                   int binaryShiftStart,
+                   int binaryShiftByteCount) {
+    super(previous);
+    this.binaryShiftStart = (short) binaryShiftStart;
+    this.binaryShiftByteCount = (short) binaryShiftByteCount;
+  }",26-32,0.98613036,0.974505,0.974505
+55,,,0,0,0,com.google.zxing.aztec.encoder.Encoder,getGF,(I)Lcom/google/zxing/common/reedsolomon/GenericGF;,4,7,57.1%,"private static GenericGF getGF(int wordSize) {
+    switch (wordSize) {
+      case 4:
+        return GenericGF.AZTEC_PARAM;
+      case 6:
+        return GenericGF.AZTEC_DATA_6;
+      case 8:
+        return GenericGF.AZTEC_DATA_8;
+      case 10:
+        return GenericGF.AZTEC_DATA_10;
+      case 12:
+        return GenericGF.AZTEC_DATA_12;
+      default:
+        return null;
+    }
+  }",301-316,0.9618089,0.9195472,0.9195472
+56,,,0,0,0,com.google.zxing.aztec.encoder.SimpleToken,<init>,(Lcom/google/zxing/aztec/encoder/Token;II)V,4,4,100.0%,"SimpleToken(Token previous, int value, int bitCount)  {
+    super(previous);
+    this.value = (short) value;
+    this.bitCount = (short) bitCount;
+  }",27-31,0.9736319,0.98773295,0.98773295
+57,,,0,0,0,com.google.zxing.aztec.encoder.State,isBetterThanOrEqualTo,(Lcom/google/zxing/aztec/encoder/State;)Z,4,4,100.0%,"boolean isBetterThanOrEqualTo(State other) {
+    int mySize = this.bitCount + (HighLevelEncoder.LATCH_TABLE[this.mode][other.mode] >> 16);
+    if (other.binaryShiftByteCount > 0 &&
+        (this.binaryShiftByteCount == 0 || this.binaryShiftByteCount > other.binaryShiftByteCount)) {
+      mySize += 10;     // Cost of entering Binary Shift mode.
+    }
+    return mySize <= other.bitCount;
+  }",139-146,0.96782416,0.9941236,0.9941236
+58,,,0,0,0,com.google.zxing.common.BitArray,<init>,()V,4,4,100.0%,"public BitArray() {
+    this.size = 0;
+    this.bits = new int[1];
+  }",29-32,0.9365849,0.9867935,0.9867935
+59,,,0,0,0,com.google.zxing.common.DetectorResult,<init>,(Lcom/google/zxing/common/BitMatrix;[Lcom/google/zxing/ResultPoint;)V,4,4,100.0%,"public DetectorResult(BitMatrix bits, ResultPoint[] points) {
+    this.bits = bits;
+    this.points = points;
+  }",33-36,0.9436552,0.9725935,0.9725935
+60,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,multiply,(II)I,4,4,100.0%,"int multiply(int a, int b) {
+  	checkInit();
+
+    if (a == 0 || b == 0) {
+      return 0;
+    }
+    return expTable[(logTable[a] + logTable[b]) % (size - 1)];
+  }",174-181,0.91653687,0.96677464,0.96677464
+61,,overload of an earlier row - skipped,0,0,0,com.google.zxing.aztec.AztecWriter,encode,(Ljava/lang/String;Lcom/google/zxing/BarcodeFormat;IILjava/nio/charset/Charset;II)Lcom/google/zxing/common/BitMatrix;,3,4,75.0%,"@Override
+  public BitMatrix encode(String contents, BarcodeFormat format, int width, int height) {
+    return encode(contents, format, width, height, null);
+  }",33-36,0.9319833,0.9804613,0.9804613
+62,,,0,0,0,com.google.zxing.aztec.encoder.HighLevelEncoder,<init>,([B)V,3,3,100.0%,"public HighLevelEncoder(byte[] text) {
+    this.text = text;
+  }",153-155,0.9279517,0.9827467,0.9827467
+63,,,0,0,0,com.google.zxing.aztec.encoder.Token,<init>,(Lcom/google/zxing/aztec/encoder/Token;)V,3,3,100.0%,"Token(Token previous) {
+    this.previous = previous;
+  }",27-29,0.9371418,0.9861423,0.9861423
+64,,,0,0,0,com.google.zxing.common.BitMatrix,flip,(II)V,3,3,100.0%,"public void flip(int x, int y) {
+    int offset = y * rowSize + (x >> 5);
+    bits[offset] ^= 1 << (x & 0x1f);
+  }",85-88,0.9291451,0.9814874,0.9814874
+65,,,0,0,0,com.google.zxing.common.BitMatrix,set,(II)V,3,3,100.0%,"public void set(int x, int y) {
+    int offset = y * rowSize + (x >> 5);
+    bits[offset] |= 1 << (x & 0x1f);
+  }",74-77,0.9334704,0.98403716,0.98403716
+66,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,inverse,(I)I,3,4,75.0%,"int inverse(int a) {
+  	checkInit();
+  	
+    if (a == 0) {
+      throw new ArithmeticException();
+    }
+    return expTable[size - logTable[a] - 1];
+  }",162-169,0.87381536,0.94403034,0.94403034
+67,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,log,(I)I,3,4,75.0%,"int log(int a) {
+  	checkInit();
+  	
+    if (a == 0) {
+      throw new IllegalArgumentException();
+    }
+    return logTable[a];
+  }",150-157,0.8687712,0.93571657,0.93571657
+68,,,0,0,0,com.google.zxing.common.reedsolomon.ReedSolomonDecoder,<init>,(Lcom/google/zxing/common/reedsolomon/GenericGF;)V,3,3,100.0%,"public ReedSolomonDecoder(GenericGF field) {
+    this.field = field;
+  }",45-47,0.9194381,0.9792345,0.9792345
+69,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,setCodeWords,(I)V,2,2,100.0%,"public void setCodeWords(int codeWords) {
+    this.codeWords = codeWords;
+  }",74-76,0.9802174,0.98667336,0.98667336
+70,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,setCompact,(Z)V,2,2,100.0%,"public void setCompact(boolean compact) {
+    this.compact = compact;
+  }",41-43,0.94409096,0.9876454,0.9876454
+71,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,setLayers,(I)V,2,2,100.0%,"public void setLayers(int layers) {
+    this.layers = layers;
+  }",63-65,0.9528751,0.9869744,0.9869744
+72,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,setMatrix,(Lcom/google/zxing/common/BitMatrix;)V,2,2,100.0%,"public void setMatrix(BitMatrix matrix) {
+    this.matrix = matrix;
+  }",85-87,0.9562321,0.9898875,0.9898875
+73,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,setSize,(I)V,2,2,100.0%,"public void setSize(int size) {
+    this.size = size;
+  }",52-54,0.9534058,0.98189586,0.98189586
+74,,,0,0,0,com.google.zxing.aztec.encoder.SimpleToken,appendTo,(Lcom/google/zxing/common/BitArray;[B)V,2,2,100.0%,"@Override
+  void appendTo(BitArray bitArray, byte[] text) {
+    bitArray.appendBits(value, bitCount);
+  }",33-36,0.93757564,0.9843146,0.9843146
+75,,overload of an earlier row - skipped,0,0,0,com.google.zxing.common.BitMatrix,<init>,(I)V,2,2,100.0%,"public BitMatrix(int dimension) {
+    this(dimension, dimension);
+  }",42-44,0.92072505,0.98012877,0.98012877
+76,,,0,0,0,com.google.zxing.common.BitMatrix,get,(II)Z,2,2,100.0%,"public boolean get(int x, int y) {
+    int offset = y * rowSize + (x >> 5);
+    return ((bits[offset] >>> (x & 0x1f)) & 1) != 0;
+  }",63-66,0.9176723,0.9767424,0.9767424
+77,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,exp,(I)I,2,2,100.0%,"int exp(int a) {
+  	checkInit();
+  	
+    return expTable[a];
+  }",141-145,0.90982157,0.9722707,0.9722707
+78,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,getOne,()Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,2,2,100.0%,"GenericGFPoly getOne() {
+  	checkInit();
+  	
+    return one;
+  }",106-110,0.92306197,0.98176533,0.98176533
+79,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,getZero,()Lcom/google/zxing/common/reedsolomon/GenericGFPoly;,2,2,100.0%,"GenericGFPoly getZero() {
+  	checkInit();
+  	
+    return zero;
+  }",100-104,0.919678,0.9795002,0.9795002
+80,,,0,0,0,com.google.zxing.aztec.AztecDetectorResult,getNbDatablocks,()I,1,1,100.0%,"public int getNbDatablocks() {
+    return nbDatablocks;
+  }",44-46,0.9395875,0.9885516,0.9885516
+81,,,0,0,0,com.google.zxing.aztec.AztecDetectorResult,getNbLayers,()I,1,1,100.0%,"public int getNbLayers() {
+    return nbLayers;
+  }",40-42,0.94185925,0.9897155,0.9897155
+82,,,0,0,0,com.google.zxing.aztec.AztecDetectorResult,isCompact,()Z,1,1,100.0%,"public boolean isCompact() {
+    return compact;
+  }",48-50,0.9465832,0.987687,0.987687
+83,,overload of an earlier row - skipped,0,0,0,com.google.zxing.aztec.AztecWriter,encode,(Ljava/lang/String;Lcom/google/zxing/BarcodeFormat;II)Lcom/google/zxing/common/BitMatrix;,1,1,100.0%,"@Override
+  public BitMatrix encode(String contents, BarcodeFormat format, int width, int height) {
+    return encode(contents, format, width, height, null);
+  }",33-36,0.9319833,0.9804613,0.9804613
+84,,,0,0,0,com.google.zxing.aztec.decoder.Decoder,totalBitsInLayer,(IZ)I,1,1,100.0%,"private static int totalBitsInLayer(int layers, boolean compact) {
+    return ((compact ? 88 : 112) + 16 * layers) * layers;
+  }",332-334,0.9173408,0.97745776,0.97745776
+85,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,getCodeWords,()I,1,1,100.0%,"public int getCodeWords() {
+    return codeWords;
+  }",70-72,0.9400234,0.98719835,0.98719835
+86,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,getLayers,()I,1,1,100.0%,"public int getLayers() {
+    return layers;
+  }",59-61,0.93788373,0.9867416,0.9867416
+87,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,getMatrix,()Lcom/google/zxing/common/BitMatrix;,1,1,100.0%,"public BitMatrix getMatrix() {
+    return matrix;
+  }",81-83,0.92487305,0.98200536,0.98200536
+88,,,0,0,0,com.google.zxing.aztec.encoder.AztecCode,isCompact,()Z,1,1,100.0%,"public boolean isCompact() {
+    return compact;
+  }",37-39,0.9465832,0.987687,0.987687
+89,,,0,0,0,com.google.zxing.aztec.encoder.Encoder,totalBitsInLayer,(IZ)I,1,1,100.0%,"private static int totalBitsInLayer(int layers, boolean compact) {
+    return ((compact ? 88 : 112) + 16 * layers) * layers;
+  }",343-345,0.9173408,0.97745776,0.97745776
+90,,,0,0,0,com.google.zxing.aztec.encoder.HighLevelEncoder$1,<init>,(Lcom/google/zxing/aztec/encoder/HighLevelEncoder;)V,1,1,100.0%,"public HighLevelEncoder(byte[] text) {
+    this.text = text;
+  }",153-155,0.9279517,0.9827467,0.9827467
+91,,,0,0,0,com.google.zxing.aztec.encoder.HighLevelEncoder$1,compare,(Lcom/google/zxing/aztec/encoder/State;Lcom/google/zxing/aztec/encoder/State;)I,1,1,100.0%,"@Override
+      public int compare(State a, State b) {
+        return a.getBitCount() - b.getBitCount();
+      }",193-196,0.9797305,0.9887594,0.9887594
+92,,,0,0,0,com.google.zxing.aztec.encoder.State,getBinaryShiftByteCount,()I,1,1,100.0%,"int getBinaryShiftByteCount() {
+    return binaryShiftByteCount;
+  }",65-67,0.92951185,0.9825966,0.9825966
+93,,,0,0,0,com.google.zxing.aztec.encoder.State,getBitCount,()I,1,1,100.0%,"int getBitCount() {
+    return bitCount;
+  }",69-71,0.92524695,0.9810734,0.9810734
+94,,,0,0,0,com.google.zxing.aztec.encoder.State,getMode,()I,1,1,100.0%,"int getMode() {
+    return mode;
+  }",57-59,0.92616457,0.9817953,0.9817953
+95,,,0,0,0,com.google.zxing.aztec.encoder.Token,add,(II)Lcom/google/zxing/aztec/encoder/Token;,1,1,100.0%,"final Token add(int value, int bitCount) {
+    return new SimpleToken(this, value, bitCount);
+   }",35-37,0.9380891,0.98664397,0.98664397
+96,,,0,0,0,com.google.zxing.aztec.encoder.Token,addBinaryShift,(II)Lcom/google/zxing/aztec/encoder/Token;,1,1,100.0%,"final Token addBinaryShift(int start, int byteCount) {
+    //int bitCount = (byteCount * 8) + (byteCount <= 31 ? 10 : byteCount <= 62 ? 20 : 21);
+    return new BinaryShiftToken(this, start, byteCount);
+  }",39-42,0.9270429,0.9811612,0.9811612
+97,,,0,0,0,com.google.zxing.aztec.encoder.Token,getPrevious,()Lcom/google/zxing/aztec/encoder/Token;,1,1,100.0%,"final Token getPrevious() {
+    return previous;
+  }",31-33,0.92903703,0.9837455,0.9837455
+98,,,0,0,0,com.google.zxing.common.BitArray,get,(I)Z,1,1,100.0%,"public boolean get(int i) {
+    return (bits[i / 32] & (1 << (i & 0x1F))) != 0;
+  }",65-67,0.92328227,0.9812937,0.9812937
+99,,,0,0,0,com.google.zxing.common.BitArray,getSize,()I,1,1,100.0%,"public int getSize() {
+    return size;
+  }",45-47,0.93735635,0.9859298,0.9859298
+100,,,0,0,0,com.google.zxing.common.BitArray,makeArray,(I)[I,1,1,100.0%,"private static int[] makeArray(int size) {
+    return new int[(size + 31) / 32];
+  }",333-335,0.92944086,0.9820082,0.9820082
+101,,,0,0,0,com.google.zxing.common.BitMatrix,getHeight,()I,1,1,100.0%,"public int getHeight() {
+    return height;
+  }",265-267,0.9386215,0.98663646,0.98663646
+102,,,0,0,0,com.google.zxing.common.BitMatrix,getWidth,()I,1,1,100.0%,"public int getWidth() {
+    return width;
+  }",258-260,0.9369879,0.98585695,0.98585695
+103,,,0,0,0,com.google.zxing.common.DecoderResult,getText,()Ljava/lang/String;,1,1,100.0%,"public String getText() {
+    return text;
+  }",52-54,0.94405633,0.98712385,0.98712385
+104,,,0,0,0,com.google.zxing.common.DetectorResult,getBits,()Lcom/google/zxing/common/BitMatrix;,1,1,100.0%,"public final BitMatrix getBits() {
+    return bits;
+  }",38-40,0.93020725,0.98431635,0.98431635
+105,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,addOrSubtract,(II)I,1,1,100.0%,"static int addOrSubtract(int a, int b) {
+    return a ^ b;
+  }",134-136,0.9273401,0.9744791,0.9744791
+106,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,getGeneratorBase,()I,1,1,100.0%,"public int getGeneratorBase() {
+    return generatorBase;
+  }",187-189,0.9446673,0.98836,0.98836
+107,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGF,getSize,()I,1,1,100.0%,"public int getSize() {
+  	return size;
+  }",183-185,0.9259762,0.9827054,0.9827054
+108,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,getCoefficient,(I)I,1,1,100.0%,"int getCoefficient(int degree) {
+    return coefficients[coefficients.length - 1 - degree];
+  }",90-92,0.92910427,0.98364055,0.98364055
+109,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,getCoefficients,()[I,1,1,100.0%,"int[] getCoefficients() {
+    return coefficients;
+  }",69-71,0.9281976,0.9828104,0.9828104
+110,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,getDegree,()I,1,1,100.0%,"int getDegree() {
+    return coefficients.length - 1;
+  }",76-78,0.92485535,0.98180145,0.98180145
+111,,,0,0,0,com.google.zxing.common.reedsolomon.GenericGFPoly,isZero,()Z,1,1,100.0%,"boolean isZero() {
+    return coefficients[0] == 0;
+  }",83-85,0.9200349,0.97870713,0.97870713

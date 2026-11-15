@@ -1,0 +1,2 @@
+id,slug,commit,module,test
+621,spring-projects/spring-boot,cf24af0bfbfdd778bfb076947ea6f012a88f372d,spring-boot-cli,org.springframework.boot.cli.SampleIntegrationTests#uiSample

@@ -1,0 +1,3567 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,11,11,0,ch.qos.logback.core.status.StatusBase,toString,()Ljava/lang/String;,13,17,76.5%,"public String toString() {
+    StringBuffer buf = new StringBuffer();
+    switch (getEffectiveLevel()) {
+    case INFO:
+      buf.append(""INFO"");
+      break;
+    case WARN:
+      buf.append(""WARN"");
+      break;
+    case ERROR:
+      buf.append(""ERROR"");
+      break;
+    }
+    if (origin != null) {
+      buf.append("" in "");
+      buf.append(origin);
+      buf.append("" -"");
+    }
+
+    buf.append("" "");
+    buf.append(message);
+
+    if (throwable != null) {
+      buf.append("" "");
+      buf.append(throwable);
+    }
+
+    return buf.toString();
+  }",116-144,0.8217992,0.9701851,0.9701851
+2,2,,11,11,0,ch.qos.logback.core.net.SMTPAppenderBase,buildSessionFromProperties,()Ljavax/mail/Session;,11,20,55.0%,"private Session buildSessionFromProperties() {
+    Properties props = new Properties(OptionHelper.getSystemProperties());
+    if (smtpHost != null) {
+      props.put(""mail.smtp.host"", smtpHost);
+    }
+    props.put(""mail.smtp.port"", Integer.toString(smtpPort));
+
+    if (localhost != null) {
+      props.put(""mail.smtp.localhost"", localhost);
+    }
+
+    LoginAuthenticator loginAuthenticator = null;
+
+    if (username != null) {
+      loginAuthenticator = new LoginAuthenticator(username, password);
+      props.put(""mail.smtp.auth"", ""true"");
+    }
+
+    if (isSTARTTLS() && isSSL()) {
+      addError(""Both SSL and StartTLS cannot be enabled simultaneously"");
+    } else {
+      if (isSTARTTLS()) {
+        // see also http://jira.qos.ch/browse/LBCORE-225
+        props.put(""mail.smtp.starttls.enable"", ""true"");
+      }
+      if (isSSL()) {
+        String SSL_FACTORY = ""javax.net.ssl.SSLSocketFactory"";
+        props.put(""mail.smtp.socketFactory.port"", Integer.toString(smtpPort));
+        props.put(""mail.smtp.socketFactory.class"", SSL_FACTORY);
+        props.put(""mail.smtp.socketFactory.fallback"", ""true"");
+      }
+    }
+
+    // props.put(""mail.debug"", ""true"");
+
+    return Session.getInstance(props, loginAuthenticator);
+  }",161-197,0.9162844,0.9953136,0.9953136
+3,3,,10,10,0,ch.qos.logback.core.net.SMTPAppenderBase,sendBuffer,(Lch/qos/logback/core/helpers/CyclicBuffer;Ljava/lang/Object;)V,31,40,77.5%,"protected void sendBuffer(CyclicBuffer<E> cb, E lastEventObject) {
+
+    // Note: this code already owns the monitor for this
+    // appender. This frees us from needing to synchronize on 'cb'.
+    try {
+      MimeBodyPart part = new MimeBodyPart();
+
+      StringBuffer sbuf = new StringBuffer();
+
+      String header = layout.getFileHeader();
+      if (header != null) {
+        sbuf.append(header);
+      }
+      String presentationHeader = layout.getPresentationHeader();
+      if (presentationHeader != null) {
+        sbuf.append(presentationHeader);
+      }
+      fillBuffer(cb, sbuf);
+      String presentationFooter = layout.getPresentationFooter();
+      if (presentationFooter != null) {
+        sbuf.append(presentationFooter);
+      }
+      String footer = layout.getFileFooter();
+      if (footer != null) {
+        sbuf.append(footer);
+      }
+
+      String subjectStr = ""Undefined subject"";
+      if (subjectLayout != null) {
+        subjectStr = subjectLayout.doLayout(lastEventObject);
+      }
+      mimeMsg.setSubject(subjectStr, charsetEncoding);
+
+      List<InternetAddress> destinationAddresses = parseAddress(lastEventObject);
+      if (destinationAddresses.isEmpty()) {
+        addInfo(""Empty destination address. Aborting email transmission"");
+        return;
+      }
+
+      InternetAddress[] toAddressArray = destinationAddresses.toArray(EMPTY_IA_ARRAY);
+      mimeMsg.setRecipients(Message.RecipientType.TO, toAddressArray);
+
+      String contentType = layout.getContentType();
+
+      if (ContentTypeUtil.isTextual(contentType)) {
+        part.setText(sbuf.toString(), charsetEncoding, ContentTypeUtil
+                .getSubType(contentType));
+      } else {
+        part.setContent(sbuf.toString(), layout.getContentType());
+      }
+
+      Multipart mp = new MimeMultipart();
+      mp.addBodyPart(part);
+      mimeMsg.setContent(mp);
+
+      mimeMsg.setSentDate(new Date());
+      addInfo(""About to send out SMTP message \"""" + subjectStr + ""\"" to "" + Arrays.toString(toAddressArray));
+      Transport.send(mimeMsg);
+    } catch (Exception e) {
+      addError(""Error occurred while sending e-mail notification."", e);
+    }
+  }",338-399,0.9123352,0.99693114,0.99693114
+4,4,,10,10,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,middleMatch,(Lch/qos/logback/core/joran/spi/ElementPath;)Ljava/util/List;,19,23,82.6%,"List<Action> middleMatch(ElementPath path) {
+    
+    int max = 0;
+    ElementSelector longestMatchingElementSelector = null;
+
+    for (ElementSelector selector : rules.keySet()) {
+      String last = selector.peekLast();
+      String first = null;
+      if(selector.size() > 1) {
+        first = selector.get(0);
+      }
+      if (isKleeneStar(last) && isKleeneStar(first)) {
+        List<String> copyOfPartList = selector.getCopyOfPartList();
+        if(copyOfPartList.size() > 2) {
+          copyOfPartList.remove(0);
+          copyOfPartList.remove(copyOfPartList.size()-1);
+        }
+        
+        int r = 0;
+        ElementSelector clone = new ElementSelector(copyOfPartList);
+        if(clone.isContainedIn(path)) {
+          r = clone.size();
+        }
+        if (r > max) {
+          max = r;
+          longestMatchingElementSelector = selector;
+        }
+      }
+    }
+
+    if (longestMatchingElementSelector != null) {
+      return rules.get(longestMatchingElementSelector);
+    } else {
+      return null;
+    }
+  }",161-196,0.84355766,0.978998,0.978998
+5,5,,7,7,0,ch.qos.logback.core.util.StatusPrinter,buildStr,(Ljava/lang/StringBuilder;Ljava/lang/String;Lch/qos/logback/core/status/Status;)V,9,16,56.2%,"public static void buildStr(StringBuilder sb, String indentation, Status s) {
+    String prefix;
+    if (s.hasChildren()) {
+      prefix = indentation + ""+ "";
+    } else {
+      prefix = indentation + ""|-"";
+    }
+
+    if (cachingDateFormat != null) {
+      String dateStr = cachingDateFormat.format(s.getDate());
+      sb.append(dateStr).append("" "");
+    }
+    sb.append(prefix).append(s).append(CoreConstants.LINE_SEPARATOR);
+
+    if (s.getThrowable() != null) {
+      appendThrowable(sb, s.getThrowable());
+    }
+    if (s.hasChildren()) {
+      Iterator<Status> ite = s.iterator();
+      while (ite.hasNext()) {
+        Status child = ite.next();
+        buildStr(sb, indentation + ""  "", child);
+      }
+    }
+  }",169-193,0.9438199,0.9910704,0.9910704
+6,6,,7,7,0,ch.qos.logback.core.net.ssl.SSLNestedComponentRegistryRules,addDefaultNestedComponentRegistryRules,(Lch/qos/logback/core/joran/spi/DefaultNestedComponentRegistry;)V,8,8,100.0%,"static public void addDefaultNestedComponentRegistryRules(
+      DefaultNestedComponentRegistry registry) {
+    registry.add(SSLComponent.class, ""ssl"", SSLConfiguration.class);
+    registry.add(SSLConfiguration.class, ""parameters"", 
+        SSLParametersConfiguration.class);
+    registry.add(SSLConfiguration.class, ""keyStore"", 
+        KeyStoreFactoryBean.class);
+    registry.add(SSLConfiguration.class, ""trustStore"", 
+        KeyStoreFactoryBean.class);
+    registry.add(SSLConfiguration.class, ""keyManagerFactory"", 
+        KeyManagerFactoryFactoryBean.class);
+    registry.add(SSLConfiguration.class, ""trustManagerFactory"", 
+        TrustManagerFactoryFactoryBean.class);
+    registry.add(SSLConfiguration.class, ""secureRandom"", 
+        SecureRandomFactoryBean.class);
+  }",26-41,0.8098743,0.96730155,0.96730155
+7,7,,7,7,0,ch.qos.logback.classic.pattern.ThrowableProxyConverter,start,()V,7,25,28.0%,"@SuppressWarnings(""unchecked"")
+  public void start() {
+
+    String lengthStr = getFirstOption();
+
+    if (lengthStr == null) {
+      lengthOption = Integer.MAX_VALUE;
+    } else {
+      lengthStr = lengthStr.toLowerCase();
+      if (""full"".equals(lengthStr)) {
+        lengthOption = Integer.MAX_VALUE;
+      } else if (""short"".equals(lengthStr)) {
+        lengthOption = 2;
+      } else {
+        try {
+          // we add one because, printing starts at offset 1
+          lengthOption = Integer.parseInt(lengthStr) + 1;
+        } catch (NumberFormatException nfe) {
+          addError(""Could not parse ["" + lengthStr + ""] as an integer"");
+          lengthOption = Integer.MAX_VALUE;
+        }
+      }
+    }
+
+    final List optionList = getOptionList();
+
+    if (optionList != null && optionList.size() > 1) {
+      final int optionListSize = optionList.size();
+      for (int i = 1; i < optionListSize; i++) {
+        String evaluatorStr = (String) optionList.get(i);
+        Context context = getContext();
+        Map evaluatorMap = (Map) context.getObject(CoreConstants.EVALUATOR_MAP);
+        EventEvaluator<ILoggingEvent> ee = (EventEvaluator<ILoggingEvent>) evaluatorMap
+                .get(evaluatorStr);
+        addEvaluator(ee);
+      }
+    }
+    super.start();
+  }",42-80,0.90272254,0.99357706,0.99357706
+8,8,,5,5,0,ch.qos.logback.core.joran.action.AppenderAction,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,16,25,64.0%,"@SuppressWarnings(""unchecked"")
+  public void begin(InterpretationContext ec, String localName,
+      Attributes attributes) throws ActionException {
+    // We are just beginning, reset variables
+    appender = null;
+    inError = false;
+
+    String className = attributes.getValue(CLASS_ATTRIBUTE);
+    if (OptionHelper.isEmpty(className)) {
+      addError(""Missing class name for appender. Near ["" + localName
+          + ""] line "" + getLineNumber(ec));
+      inError = true;
+      return;
+    }
+
+    try {
+      addInfo(""About to instantiate appender of type ["" + className + ""]"");
+
+      appender = (Appender<E>) OptionHelper.instantiateByClassName(className,
+          ch.qos.logback.core.Appender.class, context);
+
+      appender.setContext(context);
+
+      String appenderName = ec.subst(attributes.getValue(NAME_ATTRIBUTE));
+
+      if (OptionHelper.isEmpty(appenderName)) {
+        addWarn(""No appender name given for appender of type "" + className
+            + ""]."");
+      } else {
+        appender.setName(appenderName);
+        addInfo(""Naming appender as ["" + appenderName + ""]"");
+      }
+
+      // The execution context contains a bag which contains the appenders
+      // created thus far.
+      HashMap<String, Appender<E>> appenderBag = (HashMap<String, Appender<E>>) ec.getObjectMap().get(
+          ActionConst.APPENDER_BAG);
+
+      // add the appender just created to the appender bag.
+      appenderBag.put(appenderName, appender);
+
+      ec.pushObject(appender);
+    } catch (Exception oops) {
+      inError = true;
+      addError(""Could not create an Appender of type ["" + className + ""]."",
+          oops);
+      throw new ActionException(oops);
+    }
+  }",36-84,0.948423,0.9899052,0.9899052
+9,9,,5,5,0,ch.qos.logback.core.net.SMTPAppenderBase,parseAddress,(Ljava/lang/Object;)Ljava/util/List;,10,14,71.4%,"private List<InternetAddress> parseAddress(E event) {
+    int len = toPatternLayoutList.size();
+
+    List<InternetAddress> iaList = new ArrayList<InternetAddress>();
+
+    for (int i = 0; i < len; i++) {
+      try {
+        PatternLayoutBase<E> emailPL = toPatternLayoutList.get(i);
+        String emailAdrr = emailPL.doLayout(event);
+        if (emailAdrr == null || emailAdrr.length() == 0) {
+          continue;
+        }
+        InternetAddress[] tmp = InternetAddress.parse(emailAdrr, true);
+        iaList.addAll(Arrays.asList(tmp));
+      } catch (AddressException e) {
+        addError(""Could not parse email address for ["" + toPatternLayoutList.get(i) + ""] for event ["" + event + ""]"", e);
+        return iaList;
+      }
+    }
+
+    return iaList;
+  }",305-326,0.90988714,0.99191296,0.99191296
+10,10,,5,5,0,ch.qos.logback.classic.util.DefaultNestedComponentRules,addDefaultNestedComponentRegistryRules,(Lch/qos/logback/core/joran/spi/DefaultNestedComponentRegistry;)V,8,8,100.0%,"static public void addDefaultNestedComponentRegistryRules(
+      DefaultNestedComponentRegistry registry) {
+    registry.add(AppenderBase.class, ""layout"", PatternLayout.class);
+    registry.add(UnsynchronizedAppenderBase.class, ""layout"", PatternLayout.class);
+    
+    registry.add(AppenderBase.class, ""encoder"", PatternLayoutEncoder.class);
+    registry.add(UnsynchronizedAppenderBase.class, ""encoder"", PatternLayoutEncoder.class);
+    
+    registry
+        .add(EvaluatorFilter.class, ""evaluator"", JaninoEventEvaluator.class);
+
+    SSLNestedComponentRegistryRules.addDefaultNestedComponentRegistryRules(registry);
+  }",34-46,0.8969595,0.9760504,0.9760504
+11,,,5,5,0,ch.qos.logback.core.subst.NodeToStringTransformer,handleVariable,(Lch/qos/logback/core/subst/Node;Ljava/lang/StringBuilder;)V,8,17,47.1%,"private void handleVariable(Node n, StringBuilder stringBuilder) {
+    StringBuilder keyBuffer = new StringBuilder();
+    Node payload = (Node) n.payload;
+    compileNode(payload, keyBuffer);
+    String key = keyBuffer.toString();
+    String value = lookupKey(key);
+    if (value != null) {
+      stringBuilder.append(value);
+      return;
+    }
+
+    if (n.defaultPart == null) {
+      stringBuilder.append(key + CoreConstants.UNDEFINED_PROPERTY_SUFFIX);
+      return;
+    }
+
+    Node defaultPart = (Node) n.defaultPart;
+    StringBuilder defaultPartBuffer = new StringBuilder();
+    compileNode(defaultPart, defaultPartBuffer);
+    String defaultVal = defaultPartBuffer.toString();
+    stringBuilder.append(defaultVal);
+  }",71-92,0.8685842,0.96519256,0.96519256
+12,,,5,5,0,ch.qos.logback.core.joran.spi.ElementSelector,fullPathMatch,(Lch/qos/logback/core/joran/spi/ElementPath;)Z,7,7,100.0%,"public boolean fullPathMatch(ElementPath path) {
+    if (path.size() != size()) {
+      return false;
+    }
+
+    int len = size();
+    for (int i = 0; i < len; i++) {
+      if (!equalityCheck(get(i), path.get(i))) {
+        return false;
+      }
+    }
+    // if everything matches, then the two patterns are equal
+    return true;
+  }",48-61,0.9606369,0.9749727,0.9749727
+13,,,5,5,0,ch.qos.logback.core.joran.util.PropertySetter,isSanityCheckSuccessful,(Ljava/lang/String;Ljava/lang/reflect/Method;[Ljava/lang/Class;Ljava/lang/Object;)Z,4,14,28.6%,"private boolean isSanityCheckSuccessful(String name, Method method,
+      Class<?>[] params, Object complexProperty) {
+    Class<?> ccc = complexProperty.getClass();
+    if (params.length != 1) {
+      addError(""Wrong number of parameters in setter method for property [""
+          + name + ""] in "" + obj.getClass().getName());
+
+      return false;
+    }
+
+    if (!params[0].isAssignableFrom(complexProperty.getClass())) {
+      addError(""A \"""" + ccc.getName() + ""\"" object is not assignable to a \""""
+          + params[0].getName() + ""\"" variable."");
+      addError(""The class \"""" + params[0].getName() + ""\"" was loaded by "");
+      addError(""["" + params[0].getClassLoader() + ""] whereas object of type "");
+      addError(""\"""" + ccc.getName() + ""\"" was loaded by [""
+          + ccc.getClassLoader() + ""]."");
+      return false;
+    }
+
+    return true;
+  }",364-385,0.91646415,0.97574055,0.97574055
+14,,,5,5,0,ch.qos.logback.core.pattern.FormattingConverter,write,(Ljava/lang/StringBuilder;Ljava/lang/Object;)V,4,21,19.0%,"@Override
+  final public void write(StringBuilder buf, E event) {
+    String s = convert(event);
+    
+    if(formattingInfo == null) {
+      buf.append(s);
+      return;
+    }
+    
+    int min = formattingInfo.getMin();
+    int max = formattingInfo.getMax();
+
+
+    if (s == null) {
+      if (0 < min)
+        SpacePadder.spacePad(buf, min);
+      return;
+    }
+
+    int len = s.length();
+
+    if (len > max) {
+      if(formattingInfo.isLeftTruncate()) {
+        buf.append(s.substring(len - max));
+      } else {
+        buf.append(s.substring(0, max));
+      }
+    } else if (len < min) {
+      if (formattingInfo.isLeftPad()) {
+       SpacePadder.leftPad(buf, s, min);
+      } else {
+        SpacePadder.rightPad(buf, s, min);
+      }
+    } else {
+      buf.append(s);
+    }
+  }",35-71,0.86416537,0.98586833,0.98586833
+15,,,5,5,0,ch.qos.logback.classic.pattern.ThrowableProxyConverter,convert,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,3,23,13.0%,"public String convert(ILoggingEvent event) {
+
+    IThrowableProxy tp = event.getThrowableProxy();
+    if (tp == null) {
+      return CoreConstants.EMPTY_STRING;
+    }
+
+    // an evaluator match will cause stack printing to be skipped
+    if (evaluatorList != null) {
+      boolean printStack = true;
+      for (int i = 0; i < evaluatorList.size(); i++) {
+        EventEvaluator<ILoggingEvent> ee = evaluatorList.get(i);
+        try {
+          if (ee.evaluate(event)) {
+            printStack = false;
+            break;
+          }
+        } catch (EvaluationException eex) {
+          errorCount++;
+          if (errorCount < CoreConstants.MAX_ERROR_COUNT) {
+            addError(""Exception thrown for evaluator named ["" + ee.getName()
+                    + ""]"", eex);
+          } else if (errorCount == CoreConstants.MAX_ERROR_COUNT) {
+            ErrorStatus errorStatus = new ErrorStatus(
+                    ""Exception thrown for evaluator named ["" + ee.getName() + ""]."",
+                    this, eex);
+            errorStatus.add(new ErrorStatus(
+                    ""This was the last warning about this evaluator's errors.""
+                            + ""We don't want the StatusManager to get flooded."", this));
+            addStatus(errorStatus);
+          }
+        }
+      }
+
+      if (!printStack) {
+        return CoreConstants.EMPTY_STRING;
+      }
+    }
+
+    return throwableProxyToString(tp);
+  }",98-138,0.85872096,0.98520947,0.98520947
+16,,,4,4,0,ch.qos.logback.core.pattern.parser.TokenStream,tokenize,()Ljava/util/List;,17,26,65.4%,"List tokenize() throws ScanException {
+    List<Token> tokenList = new ArrayList<Token>();
+    StringBuffer buf = new StringBuffer();
+
+    while (pointer < patternLength) {
+      char c = pattern.charAt(pointer);
+      pointer++;
+
+      switch (state) {
+        case LITERAL_STATE:
+          handleLiteralState(c, tokenList, buf);
+          break;
+        case FORMAT_MODIFIER_STATE:
+          handleFormatModifierState(c, tokenList, buf);
+          break;
+        case OPTION_STATE:
+          processOption(c, tokenList, buf);
+          break;
+        case KEYWORD_STATE:
+          handleKeywordState(c, tokenList, buf);
+          break;
+        case RIGHT_PARENTHESIS_STATE:
+          handleRightParenthesisState(c, tokenList, buf);
+          break;
+
+        default:
+      }
+    }
+
+    // EOS
+    switch (state) {
+      case LITERAL_STATE:
+        addValuedToken(Token.LITERAL, buf, tokenList);
+        break;
+      case KEYWORD_STATE:
+        tokenList.add(new Token(Token.SIMPLE_KEYWORD, buf.toString()));
+        break;
+      case RIGHT_PARENTHESIS_STATE:
+        tokenList.add(Token.RIGHT_PARENTHESIS_TOKEN);
+        break;
+
+      case FORMAT_MODIFIER_STATE:
+      case OPTION_STATE:
+        throw new ScanException(""Unexpected end of pattern string"");
+    }
+
+    return tokenList;
+  }",75-122,0.84481525,0.98370296,0.98370296
+17,,,4,4,0,ch.qos.logback.core.joran.action.NestedComplexPropertyIA,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,16,29,55.2%,"public void begin(InterpretationContext ec, String localName,
+      Attributes attributes) {
+    // LogLog.debug(""in NestComponentIA begin method"");
+    // get the action data object pushed in isApplicable() method call
+    IADataForComplexProperty actionData = (IADataForComplexProperty) actionDataStack
+        .peek();
+
+    String className = attributes.getValue(CLASS_ATTRIBUTE);
+    // perform variable name substitution
+    className = ec.subst(className);
+
+    Class<?> componentClass = null;
+    try {
+
+      if (!OptionHelper.isEmpty(className)) {
+        componentClass = Loader.loadClass(className, context);
+      } else {
+        // guess class name via implicit rules
+        PropertySetter parentBean = actionData.parentBean;
+        componentClass = parentBean.getClassNameViaImplicitRules(actionData
+            .getComplexPropertyName(), actionData.getAggregationType(), ec
+            .getDefaultNestedComponentRegistry());
+      }
+
+      if (componentClass == null) {
+        actionData.inError = true;
+        String errMsg = ""Could not find an appropriate class for property [""
+            + localName + ""]"";
+        addError(errMsg);
+        return;
+      }
+
+      if (OptionHelper.isEmpty(className)) {
+        addInfo(""Assuming default type ["" + componentClass.getName()
+            + ""] for ["" + localName + ""] property"");
+      }
+
+      actionData.setNestedComplexProperty(componentClass.newInstance());
+
+      // pass along the repository
+      if (actionData.getNestedComplexProperty() instanceof ContextAware) {
+        ((ContextAware) actionData.getNestedComplexProperty())
+            .setContext(this.context);
+      }
+      //addInfo(""Pushing component ["" + localName
+      //    + ""] on top of the object stack."");
+      ec.pushObject(actionData.getNestedComplexProperty());
+
+    } catch (Exception oops) {
+      actionData.inError = true;
+      String msg = ""Could not create component ["" + localName + ""] of type [""
+          + className + ""]"";
+      addError(msg, oops);
+    }
+
+  }",85-140,0.9303754,0.9951375,0.9951375
+18,,,4,4,0,ch.qos.logback.core.joran.spi.ElementSelector,getPrefixMatchLength,(Lch/qos/logback/core/joran/spi/ElementPath;)I,12,14,85.7%,"public int getPrefixMatchLength(ElementPath p) {
+    if (p == null) {
+      return 0;
+    }
+
+    int lSize = this.partList.size();
+    int rSize = p.partList.size();
+
+    // no match possible for empty sets
+    if ((lSize == 0) || (rSize == 0)) {
+      return 0;
+    }
+
+    int minLen = (lSize <= rSize) ? lSize : rSize;
+    int match = 0;
+
+    for (int i = 0; i < minLen; i++) {
+      String l = this.partList.get(i);
+      String r = p.partList.get(i);
+
+      if (equalityCheck(l, r)) {
+        match++;
+      } else {
+        break;
+      }
+    }
+
+    return match;
+  }",111-139,0.8434928,0.9707252,0.9707252
+19,,,4,4,0,ch.qos.logback.core.joran.spi.ElementSelector,getTailMatchLength,(Lch/qos/logback/core/joran/spi/ElementPath;)I,11,14,78.6%,"public int getTailMatchLength(ElementPath p) {
+    if (p == null) {
+      return 0;
+    }
+
+    int lSize = this.partList.size();
+    int rSize = p.partList.size();
+
+    // no match possible for empty sets
+    if ((lSize == 0) || (rSize == 0)) {
+      return 0;
+    }
+
+    int minLen = (lSize <= rSize) ? lSize : rSize;
+    int match = 0;
+
+    // loop from the end to the front
+    for (int i = 1; i <= minLen; i++) {
+      String l = this.partList.get(lSize - i);
+      String r = p.partList.get(rSize - i);
+
+      if (equalityCheck(l, r)) {
+        match++;
+      } else {
+        break;
+      }
+    }
+    return match;
+  }",68-96,0.8951805,0.9846468,0.9846468
+20,,,4,4,0,ch.qos.logback.core.pattern.parser.TokenStream,handleKeywordState,(CLjava/util/List;Ljava/lang/StringBuffer;)V,11,24,45.8%,"private void handleKeywordState(char c, List<Token> tokenList, StringBuffer buf) {
+
+    if (Character.isJavaIdentifierPart(c)) {
+      buf.append(c);
+    } else if (c == CURLY_LEFT) {
+      addValuedToken(Token.SIMPLE_KEYWORD, buf, tokenList);
+      state = TokenizerState.OPTION_STATE;
+    } else if (c == CoreConstants.LEFT_PARENTHESIS_CHAR) {
+      addValuedToken(Token.COMPOSITE_KEYWORD, buf, tokenList);
+      state = TokenizerState.LITERAL_STATE;
+    } else if (c == CoreConstants.PERCENT_CHAR) {
+      addValuedToken(Token.SIMPLE_KEYWORD, buf, tokenList);
+      tokenList.add(Token.PERCENT_TOKEN);
+      state = TokenizerState.FORMAT_MODIFIER_STATE;
+    } else if (c == CoreConstants.RIGHT_PARENTHESIS_CHAR) {
+      addValuedToken(Token.SIMPLE_KEYWORD, buf, tokenList);
+      state = TokenizerState.RIGHT_PARENTHESIS_STATE;
+    } else {
+      addValuedToken(Token.SIMPLE_KEYWORD, buf, tokenList);
+      if (c == ESCAPE_CHAR) {
+        if ((pointer < patternLength)) {
+          char next = pattern.charAt(pointer++);
+          escapeUtil.escape(""%()"", buf, next, pointer);
+        }
+      } else {
+        buf.append(c);
+      }
+      state = TokenizerState.LITERAL_STATE;
+    }
+  }",183-212,0.8331217,0.9772134,0.9772134
+21,,,4,4,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,prefixMatch,(Lch/qos/logback/core/joran/spi/ElementPath;)Ljava/util/List;,10,13,76.9%,"List<Action> prefixMatch(ElementPath elementPath) {
+    int max = 0;
+    ElementSelector longestMatchingElementSelector = null;
+
+    for (ElementSelector selector : rules.keySet()) {
+      String last = selector.peekLast();
+      if (isKleeneStar(last)) {
+        int r = selector.getPrefixMatchLength(elementPath);
+        // to qualify the match length must equal p's size omitting the '*'
+        if ((r == selector.size() - 1) && (r > max)) {
+          max = r;
+          longestMatchingElementSelector = selector;
+        }
+      }
+    }
+
+    if (longestMatchingElementSelector != null) {
+      return rules.get(longestMatchingElementSelector);
+    } else {
+      return null;
+    }
+  }",134-155,0.94438374,0.9912111,0.9912111
+22,,,4,3,1,ch.qos.logback.core.BasicStatusManager,add,(Lch/qos/logback/core/status/Status;)V,9,10,90.0%,"public void add(Status newStatus) {
+    // LBCORE-72: fire event before the count check
+    fireStatusAddEvent(newStatus);
+
+    count++;
+    if (newStatus.getLevel() > level) {
+      level = newStatus.getLevel();
+    }
+
+    synchronized (statusListLock) {
+      if (statusList.size() < MAX_HEADER_COUNT) {
+        statusList.add(newStatus);
+      } else {
+        tailBuffer.add(newStatus);
+      }
+    }
+
+  }",57-74,0.9666186,0.98118013,0.98118013
+23,,,4,4,0,ch.qos.logback.core.joran.spi.Interpreter,callBeginAction,(Ljava/util/List;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,8,15,53.3%,"void callBeginAction(List<Action> applicableActionList, String tagName,
+      Attributes atts) {
+    if (applicableActionList == null) {
+      return;
+    }
+
+    Iterator<Action> i = applicableActionList.iterator();
+    while (i.hasNext()) {
+      Action action = (Action) i.next();
+      // now let us invoke the action. We catch and report any eventual
+      // exceptions
+      try {
+        action.begin(interpretationContext, tagName, atts);
+      } catch (ActionException e) {
+        skip = elementPath.duplicate();
+        cai.addError(""ActionException in Action for tag ["" + tagName + ""]"", e);
+      } catch (RuntimeException e) {
+        skip = elementPath.duplicate();
+        cai.addError(""RuntimeException in Action for tag ["" + tagName + ""]"", e);
+      }
+    }
+  }",263-284,0.92283666,0.99259573,0.99259573
+24,,,4,4,0,ch.qos.logback.core.spi.AbstractComponentTracker,genericStaleComponentRemover,(Ljava/util/LinkedHashMap;JLch/qos/logback/core/spi/AbstractComponentTracker$RemovalPredicator;)V,6,10,60.0%,"private void genericStaleComponentRemover(LinkedHashMap<String, Entry<C>> map, long now,
+                                            RemovalPredicator<C> removalPredicator) {
+    Iterator<Map.Entry<String, Entry<C>>> iter = map.entrySet().iterator();
+    while (iter.hasNext()) {
+      Map.Entry<String, Entry<C>> mapEntry = iter.next();
+      Entry<C> entry = mapEntry.getValue();
+      if (removalPredicator.isSlatedForRemoval(entry, now)) {
+        iter.remove();
+        C c = entry.component;
+        processPriorToRemoval(c);
+      } else {
+        break;
+      }
+    }
+  }",171-185,-0.23590632,0.018011816,0.018011816
+25,,,4,4,0,ch.qos.logback.core.joran.spi.ElementPath,toStableString,()Ljava/lang/String;,5,5,100.0%,"protected String toStableString() {
+    StringBuilder result = new StringBuilder();
+    for (String current : partList) {
+      result.append(""["").append(current).append(""]"");
+    }
+    return result.toString();
+  }",110-116,0.9866577,0.9380306,0.9380306
+26,,,4,4,0,ch.qos.logback.core.joran.util.PropertySetter,invokeMethodWithSingleParameterOnThisObject,(Ljava/lang/reflect/Method;Ljava/lang/Object;)V,4,8,50.0%,"void invokeMethodWithSingleParameterOnThisObject(Method method,
+      Object parameter) {
+    Class<?> ccc = parameter.getClass();
+    try {
+      method.invoke(this.obj, parameter);
+    } catch (Exception e) {
+      addError(""Could not invoke method "" + method.getName() + "" in class ""
+          + obj.getClass().getName() + "" with parameter of type ""
+          + ccc.getName(), e);
+    }
+  }",289-299,0.9812473,0.96859413,0.96859413
+27,,,3,3,0,ch.qos.logback.core.net.SMTPAppenderBase,append,(Ljava/lang/Object;)V,21,28,75.0%,"protected void append(E eventObject) {
+
+    if (!checkEntryConditions()) {
+      return;
+    }
+
+    String key = discriminator.getDiscriminatingValue(eventObject);
+    long now = System.currentTimeMillis();
+    final CyclicBuffer<E> cb = cbTracker.getOrCreate(key, now);
+    subAppend(cb, eventObject);
+
+    try {
+      if (eventEvaluator.evaluate(eventObject)) {
+        // clone the CyclicBuffer before sending out asynchronously
+        CyclicBuffer<E> cbClone = new CyclicBuffer<E>(cb);
+        // see http://jira.qos.ch/browse/LBCLASSIC-221
+        cb.clear();
+
+        if (asynchronousSending) {
+          // perform actual sending asynchronously
+          SenderRunnable senderRunnable = new SenderRunnable(cbClone, eventObject);
+          context.getExecutorService().execute(senderRunnable);
+        } else {
+          // synchronous sending
+          sendBuffer(cbClone, eventObject);
+        }
+      }
+    } catch (EvaluationException ex) {
+      errorCount++;
+      if (errorCount < CoreConstants.MAX_ERROR_COUNT) {
+        addError(""SMTPAppender's EventEvaluator threw an Exception-"", ex);
+      }
+    }
+
+    // immediately remove the buffer if asked by the user
+    if (eventMarksEndOfLife(eventObject)) {
+      cbTracker.endOfLife(key);
+    }
+
+    cbTracker.removeStaleComponents(now);
+
+    if (lastTrackerStatusPrint + delayBetweenStatusMessages < now) {
+      addInfo(""SMTPAppender ["" + name + ""] is tracking ["" + cbTracker.getComponentCount() + ""] buffers"");
+      lastTrackerStatusPrint = now;
+      // quadruple 'delay' assuming less than max delay
+      if (delayBetweenStatusMessages < MAX_DELAY_BETWEEN_STATUS_MESSAGES) {
+        delayBetweenStatusMessages *= 4;
+      }
+    }
+  }",203-252,0.942103,0.9931788,0.9931788
+28,,,3,3,0,ch.qos.logback.core.pattern.PatternLayoutBase,start,()V,13,18,72.2%,"public void start() {
+    if(pattern == null || pattern.length() == 0) {
+      addError(""Empty or null pattern."");
+      return;
+    }
+    try { 
+      Parser<E> p = new Parser<E>(pattern);
+      if (getContext() != null) {
+        p.setContext(getContext());
+      }
+      Node t = p.parse();
+      this.head = p.compile(t, getEffectiveConverterMap());
+      if (postCompileProcessor != null) {
+        postCompileProcessor.process(head);
+      }
+      ConverterUtil.setContextForConverters(getContext(), head);
+      ConverterUtil.startConverters(this.head);
+      super.start();
+    } catch (ScanException sce) {
+      StatusManager sm = getContext().getStatusManager();
+      sm.add(new ErrorStatus(""Failed to parse pattern \"""" + getPattern()
+          + ""\""."", this, sce));
+    }
+  }",75-98,0.9346353,0.99541014,0.99541014
+29,,,3,3,0,ch.qos.logback.core.joran.action.AppenderRefAction,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,12,26,46.2%,"@SuppressWarnings(""unchecked"")
+  public void begin(InterpretationContext ec, String tagName, Attributes attributes) {
+    // Let us forget about previous errors (in this object)
+    inError = false;
+
+    // logger.debug(""begin called"");
+
+    Object o = ec.peekObject();
+
+    if (!(o instanceof AppenderAttachable)) {
+      String errMsg = ""Could not find an AppenderAttachable at the top of execution stack. Near [""
+          + tagName + ""] line "" + getLineNumber(ec);
+      inError = true;
+      addError(errMsg);
+      return;
+    }
+
+    AppenderAttachable<E> appenderAttachable = (AppenderAttachable<E>) o;
+
+    String appenderName = ec.subst(attributes.getValue(ActionConst.REF_ATTRIBUTE));
+
+    if (OptionHelper.isEmpty(appenderName)) {
+      // print a meaningful error message and return
+      String errMsg = ""Missing appender ref attribute in <appender-ref> tag."";
+      inError = true;
+      addError(errMsg);
+
+      return;
+    }
+
+    HashMap<String, Appender<E>> appenderBag = (HashMap<String, Appender<E>>) ec.getObjectMap().get(
+        ActionConst.APPENDER_BAG);
+    Appender<E> appender = (Appender<E>) appenderBag.get(appenderName);
+
+    if (appender == null) {
+      String msg = ""Could not find an appender named ["" + appenderName
+          + ""]. Did you define it below instead of above in the configuration file?"";
+      inError = true;
+      addError(msg);
+      addError(""See "" + CoreConstants.CODES_URL
+          + ""#appender_order for more details."");
+      return;
+    }
+
+    addInfo(""Attaching appender named ["" + appenderName + ""] to ""
+        + appenderAttachable);
+    appenderAttachable.addAppender(appender);
+  }",30-77,0.9597114,0.9865742,0.9865742
+30,,,3,3,0,ch.qos.logback.core.joran.action.NestedBasicPropertyIA,isApplicable,(Lch/qos/logback/core/joran/spi/ElementPath;Lorg/xml/sax/Attributes;Lch/qos/logback/core/joran/spi/InterpretationContext;)Z,12,15,80.0%,"public boolean isApplicable(ElementPath elementPath, Attributes attributes,
+      InterpretationContext ec) {
+    // System.out.println(""in NestedSimplePropertyIA.isApplicable ["" + pattern +
+    // ""]"");
+    String nestedElementTagName = elementPath.peekLast();
+
+    // no point in attempting if there is no parent object
+    if (ec.isEmpty()) {
+      return false;
+    }
+
+    Object o = ec.peekObject();
+    PropertySetter parentBean = new PropertySetter(o);
+    parentBean.setContext(context);
+
+    AggregationType aggregationType = parentBean
+        .computeAggregationType(nestedElementTagName);
+
+    switch (aggregationType) {
+    case NOT_FOUND:
+    case AS_COMPLEX_PROPERTY:
+    case AS_COMPLEX_PROPERTY_COLLECTION:
+      return false;
+
+    case AS_BASIC_PROPERTY:
+    case AS_BASIC_PROPERTY_COLLECTION:
+      IADataForBasicProperty ad = new IADataForBasicProperty(parentBean,
+          aggregationType, nestedElementTagName);
+      actionDataStack.push(ad);
+      // addInfo(""NestedSimplePropertyIA deemed applicable ["" + pattern + ""]"");
+      return true;
+    default:
+      addError(""PropertySetter.canContainComponent returned "" + aggregationType);
+      return false;
+    }
+  }",43-78,0.9451145,0.99395764,0.99395764
+31,,,3,3,0,ch.qos.logback.core.joran.action.NestedComplexPropertyIA,isApplicable,(Lch/qos/logback/core/joran/spi/ElementPath;Lorg/xml/sax/Attributes;Lch/qos/logback/core/joran/spi/InterpretationContext;)Z,12,15,80.0%,"public boolean isApplicable(ElementPath elementPath, Attributes attributes,
+      InterpretationContext ic) {
+
+    String nestedElementTagName = elementPath.peekLast();
+
+    // calling ic.peekObject with an empty stack will throw an exception
+    if (ic.isEmpty()) {
+      return false;
+    }
+
+    Object o = ic.peekObject();
+    PropertySetter parentBean = new PropertySetter(o);
+    parentBean.setContext(context);
+
+    AggregationType aggregationType = parentBean
+        .computeAggregationType(nestedElementTagName);
+
+    switch (aggregationType) {
+    case NOT_FOUND:
+    case AS_BASIC_PROPERTY:
+    case AS_BASIC_PROPERTY_COLLECTION:
+      return false;
+
+      // we only push action data if NestComponentIA is applicable
+    case AS_COMPLEX_PROPERTY_COLLECTION:
+    case AS_COMPLEX_PROPERTY:
+      IADataForComplexProperty ad = new IADataForComplexProperty(parentBean,
+          aggregationType, nestedElementTagName);
+      actionDataStack.push(ad);
+
+      return true;
+    default:
+      addError(""PropertySetter.computeAggregationType returned ""
+          + aggregationType);
+      return false;
+    }
+  }",47-83,0.94232094,0.99384356,0.99384356
+32,,,3,3,0,ch.qos.logback.core.subst.Tokenizer,handleLiteralState,(CLjava/util/List;Ljava/lang/StringBuilder;)V,12,18,66.7%,"private void handleLiteralState(char c, List<Token> tokenList, StringBuilder stringBuilder) {
+    if (c == CoreConstants.DOLLAR) {
+      addLiteralToken(tokenList, stringBuilder);
+      stringBuilder.setLength(0);
+      state = TokenizerState.START_STATE;
+    } else if (c == CoreConstants.COLON_CHAR) {
+      addLiteralToken(tokenList, stringBuilder);
+      stringBuilder.setLength(0);
+      state = TokenizerState.DEFAULT_VAL_STATE;
+    } else if (c == CoreConstants.CURLY_LEFT) {
+      addLiteralToken(tokenList, stringBuilder);
+      tokenList.add(Token.CURLY_LEFT_TOKEN);
+      stringBuilder.setLength(0);
+    } else  if (c == CoreConstants.CURLY_RIGHT) {
+      addLiteralToken(tokenList, stringBuilder);
+      tokenList.add(Token.CURLY_RIGHT_TOKEN);
+      stringBuilder.setLength(0);
+    } else {
+      stringBuilder.append(c);
+    }
+
+  }",96-117,0.8657612,0.99137104,0.99137104
+33,,,3,3,0,ch.qos.logback.core.pattern.PatternLayoutBase,getEffectiveConverterMap,()Ljava/util/Map;,11,12,91.7%,"public Map<String, String> getEffectiveConverterMap() {
+    Map<String, String> effectiveMap = new HashMap<String, String>();
+
+    // add the least specific map fist
+    Map<String, String> defaultMap = getDefaultConverterMap();
+    if (defaultMap != null) {
+      effectiveMap.putAll(defaultMap);
+    }
+
+    // contextMap is more specific than the default map
+    Context context = getContext();
+    if (context != null) {
+      @SuppressWarnings(""unchecked"")
+      Map<String, String> contextMap = (Map<String, String>) context
+          .getObject(CoreConstants.PATTERN_RULE_REGISTRY);
+      if (contextMap != null) {
+        effectiveMap.putAll(contextMap);
+      }
+    }
+    // set the most specific map last
+    effectiveMap.putAll(instanceConverterMap);
+    return effectiveMap;
+  }",51-73,0.9165586,0.9899543,0.9899543
+34,,,3,2,1,ch.qos.logback.classic.Logger,setLevel,(Lch/qos/logback/classic/Level;)V,9,15,60.0%,"public synchronized void setLevel(Level newLevel) {
+    if (level == newLevel) {
+      // nothing to do;
+      return;
+    }
+    if (newLevel == null && isRootLogger()) {
+      throw new IllegalArgumentException(
+          ""The level of the root logger cannot be set to null"");
+    }
+
+    level = newLevel;
+    if (newLevel == null) {
+      effectiveLevelInt = parent.effectiveLevelInt;
+    } else {
+      effectiveLevelInt = newLevel.levelInt;
+    }
+
+    if (childrenList != null) {
+      int len = childrenList.size();
+      for (int i = 0; i < len; i++) {
+        Logger child = (Logger) childrenList.get(i);
+        // tell child to handle parent levelInt change
+        child.handleParentLevelChange(effectiveLevelInt);
+      }
+    }
+    // inform listeners
+    loggerContext.fireOnLevelChange(this, newLevel);
+  }",149-176,0.91719717,0.98786277,0.98786277
+35,,,3,3,0,ch.qos.logback.classic.net.SMTPAppender,start,()V,8,8,100.0%,"public void start() {    
+    if (eventEvaluator == null) {
+      OnErrorEvaluator onError = new OnErrorEvaluator();
+      onError.setContext(getContext());
+      onError.setName(""onError"");
+      onError.start();
+      this.eventEvaluator = onError;      
+    }
+    super.start();
+  }",56-65,0.9237514,0.99573904,0.99573904
+36,,,3,3,0,ch.qos.logback.core.joran.spi.Interpreter,lookupImplicitAction,(Lch/qos/logback/core/joran/spi/ElementPath;Lorg/xml/sax/Attributes;Lch/qos/logback/core/joran/spi/InterpretationContext;)Ljava/util/List;,8,8,100.0%,"List<Action> lookupImplicitAction(ElementPath elementPath, Attributes attributes,
+      InterpretationContext ec) {
+    int len = implicitActions.size();
+
+    for (int i = 0; i < len; i++) {
+      ImplicitAction ia = (ImplicitAction) implicitActions.get(i);
+
+      if (ia.isApplicable(elementPath, attributes, ec)) {
+        List<Action> actionList = new ArrayList<Action>(1);
+        actionList.add(ia);
+
+        return actionList;
+      }
+    }
+
+    return null;
+  }",230-246,0.9559321,0.98325485,0.98325485
+37,,,3,3,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,addRule,(Lch/qos/logback/core/joran/spi/ElementSelector;Lch/qos/logback/core/joran/action/Action;)V,7,7,100.0%,"public void addRule(ElementSelector elementSelector, Action action) {
+    action.setContext(context);
+
+    List<Action> a4p = rules.get(elementSelector);
+
+    if (a4p == null) {
+      a4p = new ArrayList<Action>();
+      rules.put(elementSelector, a4p);
+    }
+
+    a4p.add(action);
+  }",50-61,0.94452035,0.98765653,0.98765653
+38,,,3,3,0,ch.qos.logback.core.joran.event.SaxEventRecorder,startElement,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,6,6,100.0%,"public void startElement(String namespaceURI, String localName, String qName,
+      Attributes atts) {
+
+    String tagName = getTagName(localName, qName);
+    globalElementPath.push(tagName);
+    ElementPath current = globalElementPath.duplicate();
+    saxEventList.add(new StartEvent(current, namespaceURI, localName, qName,
+        atts, getLocator()));
+  }",103-111,0.98659205,0.9597903,0.9597903
+39,,,3,3,0,ch.qos.logback.core.net.SMTPAppenderBase,addTo,(Ljava/lang/String;)V,6,7,85.7%,"public void addTo(String to) {
+    if (to == null || to.length() == 0) {
+      throw new IllegalArgumentException(""Null or empty <to> property"");
+    }
+    PatternLayoutBase plb = makeNewToPatternLayout(to.trim());
+    plb.setContext(context);
+    plb.start();
+    this.toPatternLayoutList.add(plb);
+  }",549-557,0.98508805,0.962707,0.962707
+40,,,3,3,0,ch.qos.logback.core.pattern.parser.TokenStream,handleFormatModifierState,(CLjava/util/List;Ljava/lang/StringBuffer;)V,6,10,60.0%,"private void handleFormatModifierState(char c, List<Token> tokenList, StringBuffer buf) {
+    if (c == CoreConstants.LEFT_PARENTHESIS_CHAR) {
+      addValuedToken(Token.FORMAT_MODIFIER, buf, tokenList);
+      tokenList.add(Token.BARE_COMPOSITE_KEYWORD_TOKEN);
+      state = TokenizerState.LITERAL_STATE;
+    } else if (Character.isJavaIdentifierStart(c)) {
+      addValuedToken(Token.FORMAT_MODIFIER, buf, tokenList);
+      state = TokenizerState.KEYWORD_STATE;
+      buf.append(c);
+    } else {
+      buf.append(c);
+    }
+  }",147-159,0.9447675,0.9929557,0.9929557
+41,,,3,3,0,ch.qos.logback.classic.net.SMTPAppender,fillBuffer,(Lch/qos/logback/core/helpers/CyclicBuffer;Ljava/lang/StringBuffer;)V,5,5,100.0%,"@Override
+  protected void fillBuffer(CyclicBuffer<ILoggingEvent> cb, StringBuffer sbuf) {
+    int len = cb.length();
+    for (int i = 0; i < len; i++) {
+      ILoggingEvent event = cb.get();
+      sbuf.append(layout.doLayout(event));
+    }
+  }",87-94,0.98479,0.96378314,0.96378314
+42,,,3,3,0,ch.qos.logback.core.joran.spi.ElementSelector,hashCode,()I,5,5,100.0%,"@Override
+  public int hashCode() {
+    int hc = 0;
+    int len = size();
+
+    for (int i = 0; i < len; i++) {
+      // make Pattern comparisons case insensitive
+      // http://jira.qos.ch/browse/LBCORE-76
+      hc ^= get(i).toLowerCase().hashCode();
+    }
+    return hc;
+  }",169-180,0.9799794,0.97137743,0.97137743
+43,,,3,3,0,ch.qos.logback.core.joran.util.PropertySetter,getPropertyDescriptor,(Ljava/lang/String;)Ljava/beans/PropertyDescriptor;,5,6,83.3%,"protected PropertyDescriptor getPropertyDescriptor(String name) {
+    if (propertyDescriptors == null) {
+      introspect();
+    }
+
+    for (int i = 0; i < propertyDescriptors.length; i++) {
+      // System.out.println(""Comparing "" + name + "" against ""
+      // + propertyDescriptors[i].getName());
+      if (name.equals(propertyDescriptors[i].getName())) {
+        // System.out.println(""matched"");
+        return propertyDescriptors[i];
+      }
+    }
+
+    return null;
+  }",405-420,0.90245694,0.9943222,0.9943222
+44,,,3,3,0,ch.qos.logback.core.pattern.parser.TokenStream,addValuedToken,(ILjava/lang/StringBuffer;Ljava/util/List;)V,4,4,100.0%,"private void addValuedToken(int type, StringBuffer buf, List<Token> tokenList) {
+    if (buf.length() > 0) {
+      tokenList.add(new Token(type, buf.toString()));
+      buf.setLength(0);
+    }
+  }",231-236,0.9914742,0.93970454,0.93970454
+45,,,3,2,1,ch.qos.logback.core.status.StatusBase,getEffectiveLevel,()I,4,8,50.0%,"public synchronized int getEffectiveLevel() {
+    int result = level;
+    int effLevel;
+
+    Iterator it = iterator();
+    Status s;
+    while (it.hasNext()) {
+      s = (Status) it.next();
+      effLevel = s.getEffectiveLevel();
+      if (effLevel > result) {
+        result = effLevel;
+      }
+    }
+    return result;
+  }",81-95,0.9181453,0.9881496,0.9881496
+46,,,3,3,0,ch.qos.logback.core.subst.Tokenizer,addLiteralToken,(Ljava/util/List;Ljava/lang/StringBuilder;)V,4,4,100.0%,"private void addLiteralToken(List<Token> tokenList, StringBuilder stringBuilder) {
+    if (stringBuilder.length() == 0)
+      return;
+    tokenList.add(new Token(Token.Type.LITERAL, stringBuilder.toString()));
+  }",119-123,0.9939251,0.9278842,0.9278842
+47,,,3,3,0,ch.qos.logback.core.subst.Tokenizer,handleStartState,(CLjava/util/List;Ljava/lang/StringBuilder;)V,4,5,80.0%,"private void handleStartState(char c, List<Token> tokenList, StringBuilder stringBuilder) {
+    if (c == CoreConstants.CURLY_LEFT) {
+      tokenList.add(Token.START_TOKEN);
+    } else {
+      stringBuilder.append(CoreConstants.DOLLAR).append(c);
+    }
+    state = TokenizerState.LITERAL_STATE;
+  }",87-94,0.9873512,0.962871,0.962871
+48,,,3,3,0,ch.qos.logback.classic.joran.action.ConfigurationAction,processScanAttrib,(Lch/qos/logback/core/joran/spi/InterpretationContext;Lorg/xml/sax/Attributes;)V,3,18,16.7%,"void processScanAttrib(InterpretationContext ic, Attributes attributes) {
+    String scanAttrib = ic.subst(attributes.getValue(SCAN_ATTR));
+    if (!OptionHelper.isEmpty(scanAttrib)
+            && !""false"".equalsIgnoreCase(scanAttrib)) {
+      ReconfigureOnChangeFilter rocf = new ReconfigureOnChangeFilter();
+      rocf.setContext(context);
+      String scanPeriodAttrib = ic.subst(attributes.getValue(SCAN_PERIOD_ATTR));
+      if (!OptionHelper.isEmpty(scanPeriodAttrib)) {
+        try {
+          Duration duration = Duration.valueOf(scanPeriodAttrib);
+          rocf.setRefreshPeriod(duration.getMilliseconds());
+          addInfo(""Setting ReconfigureOnChangeFilter scanning period to ""
+                  + duration);
+        } catch (NumberFormatException nfe) {
+          addError(""Error while converting ["" + scanAttrib + ""] to long"", nfe);
+        }
+      }
+      rocf.start();
+      LoggerContext lc = (LoggerContext) context;
+      addInfo(""Adding ReconfigureOnChangeFilter as a turbo filter"");
+      lc.addTurboFilter(rocf);
+    }
+  }",69-91,0.93314654,0.9967786,0.9967786
+49,,,3,3,0,ch.qos.logback.core.helpers.CyclicBuffer,asList,()Ljava/util/List;,3,4,75.0%,"public List<E> asList() {
+    List<E> tList = new ArrayList<E>();
+    for(int i = 0; i < length(); i++) {
+      tList.add(get(i));
+    }
+    return tList;
+  }",123-129,0.8649069,0.7958863,0.7958863
+50,,,3,3,0,ch.qos.logback.core.joran.event.SaxEventRecorder,getLastEvent,()Lch/qos/logback/core/joran/event/SaxEvent;,3,4,75.0%,"SaxEvent getLastEvent() {
+    if (saxEventList.isEmpty()) {
+      return null;
+    }
+    int size = saxEventList.size();
+    return saxEventList.get(size - 1);
+  }",132-138,0.9838412,0.9409264,0.9409264
+51,,,3,3,0,ch.qos.logback.core.joran.spi.ElementPath,peekLast,()Ljava/lang/String;,3,4,75.0%,"public String peekLast() {
+    if (!partList.isEmpty()) {
+      int size = partList.size();
+      return (String) partList.get(size - 1);
+    } else {
+      return null;
+    }
+  }",96-103,0.9419696,0.9754177,0.9754177
+52,,,3,3,0,ch.qos.logback.core.joran.spi.ElementPath,pop,()V,3,3,100.0%,"public void pop() {
+    if (!partList.isEmpty()) {
+      partList.remove(partList.size() - 1);
+    }
+  }",90-94,0.9940879,0.93703467,0.93703467
+53,,,3,3,0,ch.qos.logback.core.ContextBase,getProperty,(Ljava/lang/String;)Ljava/lang/String;,2,3,66.7%,"public String getProperty(String key) {
+    if (CONTEXT_NAME_KEY.equals(key))
+      return getName();
+
+    return (String) this.propertyMap.get(key);
+  }",82-87,0.9965547,0.91936237,0.91936237
+54,,,3,2,1,ch.qos.logback.core.status.StatusBase,iterator,()Ljava/util/Iterator;,2,3,66.7%,"public synchronized Iterator<Status> iterator() {
+    if (childrenList != null) {
+      return childrenList.iterator();
+    } else {
+      return EMPTY_LIST.iterator();
+    }
+  }",57-63,0.954631,0.9148763,0.9148763
+55,,,3,3,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,isSuffixPattern,(Lch/qos/logback/core/joran/spi/ElementSelector;)Z,1,1,100.0%,"private boolean isSuffixPattern(ElementSelector p) {
+    return (p.size() > 1) && p.get(0).equals(KLEENE_STAR);
+  }",130-132,0.9942878,0.9123361,0.9123361
+56,,,2,2,0,ch.qos.logback.core.joran.action.NestedComplexPropertyIA,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,19,24,79.2%,"public void end(InterpretationContext ec, String tagName) {
+
+    // pop the action data object pushed in isApplicable() method call
+    // we assume that each this begin
+    IADataForComplexProperty actionData = (IADataForComplexProperty) actionDataStack
+        .pop();
+
+    if (actionData.inError) {
+      return;
+    }
+
+    PropertySetter nestedBean = new PropertySetter(actionData
+        .getNestedComplexProperty());
+    nestedBean.setContext(context);
+
+    // have the nested element point to its parent if possible
+    if (nestedBean.computeAggregationType(""parent"") == AggregationType.AS_COMPLEX_PROPERTY) {
+      nestedBean.setComplexProperty(""parent"", actionData.parentBean.getObj());
+    }
+
+    // start the nested complex property if it implements LifeCycle and is not
+    // marked with a @NoAutoStart annotation
+    Object nestedComplexProperty = actionData.getNestedComplexProperty();
+    if (nestedComplexProperty instanceof LifeCycle
+        && NoAutoStartUtil.notMarkedWithNoAutoStart(nestedComplexProperty)) {
+      ((LifeCycle) nestedComplexProperty).start();
+    }
+
+    Object o = ec.peekObject();
+
+    if (o != actionData.getNestedComplexProperty()) {
+      addError(""The object on the top the of the stack is not the component pushed earlier."");
+    } else {
+      ec.popObject();
+      // Now let us attach the component
+      switch (actionData.aggregationType) {
+      case AS_COMPLEX_PROPERTY:
+        actionData.parentBean.setComplexProperty(tagName, actionData
+            .getNestedComplexProperty());
+
+        break;
+      case AS_COMPLEX_PROPERTY_COLLECTION:
+        actionData.parentBean.addComplexProperty(tagName, actionData
+            .getNestedComplexProperty());
+
+        break;
+      }
+    }
+  }",142-190,0.9391117,0.9939777,0.9939777
+57,,,2,2,0,ch.qos.logback.classic.joran.action.ConfigurationAction,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,14,16,87.5%,"public void begin(InterpretationContext ic, String name, Attributes attributes) {
+    threshold = System.currentTimeMillis();
+
+    // See LOGBACK-527 (the system property is looked up first. Thus, it overrides
+    // the equivalent property in the config file. This reversal of scope priority is justified
+    // by the use case: the admin trying to chase rogue config file
+    String debugAttrib = System.getProperty(DEBUG_SYSTEM_PROPERTY_KEY);
+    if (debugAttrib == null) {
+      debugAttrib = ic.subst(attributes.getValue(INTERNAL_DEBUG_ATTR));
+    }
+
+    if (OptionHelper.isEmpty(debugAttrib) || debugAttrib.equalsIgnoreCase(""false"")
+            || debugAttrib.equalsIgnoreCase(""null"")) {
+      addInfo(INTERNAL_DEBUG_ATTR + "" attribute not set"");
+    } else {
+      OnConsoleStatusListener.addNewInstanceToContext(context);
+    }
+
+    processScanAttrib(ic, attributes);
+
+    ContextUtil contextUtil = new ContextUtil(context);
+    contextUtil.addHostNameAsProperty();
+
+    if(EnvUtil.isGroovyAvailable()) {
+      LoggerContext lc = (LoggerContext) context;
+      contextUtil.addGroovyPackages(lc.getFrameworkPackages());
+    }
+
+    // the context is turbo filter attachable, so it is pushed on top of the
+    // stack
+    ic.pushObject(getContext());
+  }",36-67,0.97322637,0.97719777,0.97719777
+58,,,2,2,0,ch.qos.logback.core.joran.spi.EventPlayer,play,(Ljava/util/List;)V,13,13,100.0%,"public void play(List<SaxEvent> aSaxEventList) {
+    eventList = aSaxEventList;
+    SaxEvent se;
+    for(currentIndex = 0; currentIndex < eventList.size(); currentIndex++) {
+      se = eventList.get(currentIndex);
+      
+      if(se instanceof StartEvent) {
+        interpreter.startElement((StartEvent) se);
+        // invoke fireInPlay after startElement processing
+        interpreter.getInterpretationContext().fireInPlay(se);
+      }
+      if(se instanceof BodyEvent) {
+        // invoke fireInPlay before  characters processing
+        interpreter.getInterpretationContext().fireInPlay(se);
+        interpreter.characters((BodyEvent) se);
+      }
+      if(se instanceof EndEvent) {
+        // invoke fireInPlay before endElement processing
+        interpreter.getInterpretationContext().fireInPlay(se);
+        interpreter.endElement((EndEvent) se);
+      }
+    
+    }
+  }",43-66,0.8824312,0.9935628,0.9935628
+59,,,2,2,0,ch.qos.logback.core.subst.Parser,T,()Lch/qos/logback/core/subst/Node;,11,20,55.0%,"private Node T() throws ScanException {
+    Token t = peekAtCurentToken();
+
+    switch (t.type) {
+      case LITERAL:
+        advanceTokenPointer();
+        return makeNewLiteralNode(t.payload);
+      case CURLY_LEFT:
+        advanceTokenPointer();
+        Node innerNode = C();
+        Token right = peekAtCurentToken();
+        expectCurlyRight(right);
+        advanceTokenPointer();
+        Node curlyLeft = makeNewLiteralNode(CoreConstants.LEFT_ACCOLADE);
+        curlyLeft.append(innerNode);
+        curlyLeft.append(makeNewLiteralNode(CoreConstants.RIGHT_ACCOLADE));
+        return curlyLeft;
+      case START:
+        advanceTokenPointer();
+        Node v = V();
+        Token w = peekAtCurentToken();
+        expectCurlyRight(w);
+        advanceTokenPointer();
+        return v;
+      default:
+        return null;
+    }
+  }",72-99,0.89991635,0.9965587,0.9965587
+60,,,2,2,0,ch.qos.logback.core.joran.util.PropertySetter,setComplexProperty,(Ljava/lang/String;Ljava/lang/Object;)V,10,19,52.6%,"public void setComplexProperty(String name, Object complexProperty) {
+    String dName = Introspector.decapitalize(name);
+    PropertyDescriptor propertyDescriptor = getPropertyDescriptor(dName);
+
+    if (propertyDescriptor == null) {
+      addWarn(""Could not find PropertyDescriptor for ["" + name + ""] in ""
+          + objClass.getName());
+
+      return;
+    }
+
+    Method setter = propertyDescriptor.getWriteMethod();
+
+    if (setter == null) {
+      addWarn(""Not setter method for property ["" + name + ""] in ""
+          + obj.getClass().getName());
+
+      return;
+    }
+
+    Class<?>[] paramTypes = setter.getParameterTypes();
+
+    if (!isSanityCheckSuccessful(name, setter, paramTypes, complexProperty)) {
+      return;
+    }
+    try {
+      invokeMethodWithSingleParameterOnThisObject(setter, complexProperty);
+
+    } catch (Exception e) {
+      addError(""Could not set component "" + obj + "" for parent component ""
+          + obj, e);
+    }
+  }",330-362,0.9087469,0.9924504,0.9924504
+61,,,2,2,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,suffixMatch,(Lch/qos/logback/core/joran/spi/ElementPath;)Ljava/util/List;,9,12,75.0%,"List<Action> suffixMatch(ElementPath elementPath) {
+    int max = 0;
+    ElementSelector longestMatchingElementSelector = null;
+
+    for (ElementSelector selector : rules.keySet()) {
+      if (isSuffixPattern(selector)) {
+        int r = selector.getTailMatchLength(elementPath);
+        if (r > max) {
+          max = r;
+          longestMatchingElementSelector = selector;
+        }
+      }
+    }
+
+    if (longestMatchingElementSelector != null) {
+      return rules.get(longestMatchingElementSelector);
+    } else {
+      return null;
+    }
+  }",109-128,0.9216445,0.99480414,0.99480414
+62,,,2,2,0,ch.qos.logback.core.joran.util.StringToObjectConverter,canBeBuiltFromSimpleString,(Ljava/lang/Class;)Z,9,12,75.0%,"static public boolean canBeBuiltFromSimpleString(Class<?> parameterClass) {
+    Package p = parameterClass.getPackage();
+    if (parameterClass.isPrimitive()) {
+      return true;
+    } else if (p != null && ""java.lang"".equals(p.getName())) {
+      return true;
+    } else if (followsTheValueOfConvention(parameterClass)) {
+      return true;
+    } else if (parameterClass.isEnum()) {
+      return true;
+    } else if (isOfTypeCharset(parameterClass)) {
+      return true;
+    }
+    return false;
+  }",33-47,0.8852896,0.98578775,0.98578775
+63,,,2,2,0,ch.qos.logback.core.joran.spi.Interpreter,callBodyAction,(Ljava/util/List;Ljava/lang/String;)V,8,12,66.7%,"private void callBodyAction(List<Action> applicableActionList, String body) {
+    if (applicableActionList == null) {
+      return;
+    }
+    Iterator<Action> i = applicableActionList.iterator();
+
+    while (i.hasNext()) {
+      Action action = i.next();
+      try {
+        action.body(interpretationContext, body);
+      } catch (ActionException ae) {
+        cai
+            .addError(""Exception in end() methd for action ["" + action + ""]"",
+                ae);
+      }
+    }
+  }",286-302,0.93587506,0.99070305,0.99070305
+64,,,2,2,0,ch.qos.logback.core.joran.spi.Interpreter,callEndAction,(Ljava/util/List;Ljava/lang/String;)V,8,13,61.5%,"private void callEndAction(List<Action> applicableActionList, String tagName) {
+    if (applicableActionList == null) {
+      return;
+    }
+
+    // logger.debug(""About to call end actions on node: ["" + localName + ""]"");
+    Iterator<Action> i = applicableActionList.iterator();
+
+    while (i.hasNext()) {
+      Action action = i.next();
+      // now let us invoke the end method of the action. We catch and report
+      // any eventual exceptions
+      try {
+        action.end(interpretationContext, tagName);
+      } catch (ActionException ae) {
+        // at this point endAction, there is no point in skipping children as
+        // they have been already processed
+        cai.addError(""ActionException in Action for tag ["" + tagName + ""]"", ae);
+      } catch (RuntimeException e) {
+        // no point in setting skip
+        cai.addError(""RuntimeException in Action for tag ["" + tagName + ""]"", e);
+      }
+    }
+  }",304-327,0.9494462,0.9845576,0.9845576
+65,,,2,2,0,ch.qos.logback.core.joran.spi.Interpreter,characters,(Lch/qos/logback/core/joran/event/BodyEvent;)V,8,8,100.0%,"public void characters(BodyEvent be) {
+
+    setDocumentLocator(be.locator);
+
+    String body = be.getText();
+    List<Action> applicableActionList = actionListStack.peek();
+
+    if (body != null) {
+      body = body.trim();
+      if (body.length() > 0) {
+        // System.out.println(""calling body method with [""+body+ ""]"");
+        callBodyAction(applicableActionList, body);
+      }
+    }
+  }",164-178,0.969625,0.9778683,0.9778683
+66,,,2,2,0,ch.qos.logback.core.pattern.ConverterUtil,startConverters,(Lch/qos/logback/core/pattern/Converter;)V,8,12,66.7%,"public static <E> void startConverters(Converter<E> head) {
+    Converter<E> c = head;
+    while (c != null) {
+      // CompositeConverter is a subclass of  DynamicConverter
+      if (c instanceof CompositeConverter) {
+        CompositeConverter<E> cc = (CompositeConverter<E>) c;
+        Converter<E> childConverter = cc.childConverter;
+        startConverters(childConverter);
+        cc.start();
+      } else if (c instanceof DynamicConverter) {
+        DynamicConverter<E> dc = (DynamicConverter<E>) c;
+        dc.start();
+      }
+      c = c.getNext();
+    }
+  }",26-41,0.8869233,0.9931901,0.9931901
+67,,,2,1,1,ch.qos.logback.core.spi.AbstractComponentTracker,getOrCreate,(Ljava/lang/String;J)Ljava/lang/Object;,8,8,100.0%,"public synchronized C getOrCreate(String key, long timestamp) {
+    Entry<C> entry = getFromEitherMap(key);
+    if (entry == null) {
+      C c = buildComponent(key);
+      entry = new Entry(key, c, timestamp);
+      // new entries go into the main map
+      liveMap.put(key, entry);
+    } else {
+      entry.setTimestamp(timestamp);
+    }
+    return entry.component;
+  }",121-132,0.9684612,0.97143507,0.97143507
+68,,,2,1,1,ch.qos.logback.core.AppenderBase,doAppend,(Ljava/lang/Object;)V,7,15,46.7%,"public synchronized void doAppend(E eventObject) {
+    // WARNING: The guard check MUST be the first statement in the
+    // doAppend() method.
+
+    // prevent re-entry.
+    if (guard) {
+      return;
+    }
+
+    try {
+      guard = true;
+
+      if (!this.started) {
+        if (statusRepeatCount++ < ALLOWED_REPEATS) {
+          addStatus(new WarnStatus(
+              ""Attempted to append to non started appender ["" + name + ""]."",
+              this));
+        }
+        return;
+      }
+
+      if (getFilterChainDecision(eventObject) == FilterReply.DENY) {
+        return;
+      }
+
+      // ok, we now invoke derived class' implementation of append
+      this.append(eventObject);
+
+    } catch (Exception e) {
+      if (exceptionCount++ < ALLOWED_REPEATS) {
+        addError(""Appender ["" + name + ""] failed to append."", e);
+      }
+    } finally {
+      guard = false;
+    }
+  }",59-94,0.93541765,0.9928531,0.9928531
+69,,,2,2,0,ch.qos.logback.core.joran.action.AppenderAction,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,7,10,70.0%,"public void end(InterpretationContext ec, String name) {
+    if (inError) {
+      return;
+    }
+
+    if (appender instanceof LifeCycle) {
+      ((LifeCycle) appender).start();
+    }
+
+    Object o = ec.peekObject();
+
+    if (o != appender) {
+      addWarn(""The object at the of the stack is not the appender named [""
+          + appender.getName() + ""] pushed earlier."");
+    } else {
+      ec.popObject();
+    }
+  }",90-107,0.97299963,0.9735524,0.9735524
+70,,,2,2,0,ch.qos.logback.core.pattern.parser.TokenStream,handleLiteralState,(CLjava/util/List;Ljava/lang/StringBuffer;)V,7,12,58.3%,"private void handleLiteralState(char c, List<Token> tokenList, StringBuffer buf) {
+    switch (c) {
+      case ESCAPE_CHAR:
+        escape(""%()"", buf);
+        break;
+
+      case CoreConstants.PERCENT_CHAR:
+        addValuedToken(Token.LITERAL, buf, tokenList);
+        tokenList.add(Token.PERCENT_TOKEN);
+        state = TokenizerState.FORMAT_MODIFIER_STATE;
+        break;
+
+      case CoreConstants.RIGHT_PARENTHESIS_CHAR:
+        addValuedToken(Token.LITERAL, buf, tokenList);
+        state = TokenizerState.RIGHT_PARENTHESIS_STATE;
+        break;
+
+      default:
+        buf.append(c);
+    }
+  }",161-181,0.8960611,0.99594206,0.99594206
+71,,,2,2,0,ch.qos.logback.core.joran.JoranConfiguratorBase,buildInterpreter,()V,6,6,100.0%,"@Override
+  protected void buildInterpreter() {
+    super.buildInterpreter();
+    Map<String, Object> omap = interpreter.getInterpretationContext()
+        .getObjectMap();
+    omap.put(ActionConst.APPENDER_BAG, new HashMap());
+    omap.put(ActionConst.FILTER_CHAIN_BAG, new HashMap());
+  }",101-108,0.9770662,0.97279006,0.97279006
+72,,,2,2,0,ch.qos.logback.core.joran.event.SaxEventRecorder,characters,([CII)V,6,9,66.7%,"public void characters(char[] ch, int start, int length) {
+    String bodyStr = new String(ch, start, length);
+    SaxEvent lastEvent = getLastEvent();
+    if (lastEvent instanceof BodyEvent) {
+      BodyEvent be = (BodyEvent) lastEvent;
+      be.append(bodyStr);
+    } else {
+      // ignore space only text if the previous event is not a BodyEvent
+      if (!isSpaceOnly(bodyStr)) {
+        saxEventList.add(new BodyEvent(bodyStr, getLocator()));
+      }
+    }
+  }",113-125,0.9616931,0.9794302,0.9794302
+73,,,2,2,0,ch.qos.logback.core.joran.spi.HostClassAndPropertyDouble,hashCode,()I,6,6,100.0%,"@Override
+  public int hashCode() {
+    final int prime = 31;
+    int result = 1;
+    result = prime * result + ((hostClass == null) ? 0 : hostClass.hashCode());
+    result = prime * result
+        + ((propertyName == null) ? 0 : propertyName.hashCode());
+    return result;
+  }",44-52,0.9788741,0.94438994,0.94438994
+74,,,2,2,0,ch.qos.logback.core.joran.util.PropertySetter,getMethod,(Ljava/lang/String;)Ljava/lang/reflect/Method;,6,6,100.0%,"protected Method getMethod(String methodName) {
+    if (methodDescriptors == null) {
+      introspect();
+    }
+
+    for (int i = 0; i < methodDescriptors.length; i++) {
+      if (methodName.equals(methodDescriptors[i].getName())) {
+        return methodDescriptors[i].getMethod();
+      }
+    }
+
+    return null;
+  }",391-403,0.824125,0.9615297,0.9615297
+75,,,2,2,0,ch.qos.logback.core.pattern.PatternLayoutBase,writeLoopOnConverters,(Ljava/lang/Object;)Ljava/lang/String;,6,6,100.0%,"protected String writeLoopOnConverters(E event) {
+    StringBuilder buf = new StringBuilder(128);
+    Converter<E> c = head;
+    while (c != null) {
+      c.write(buf, event);
+      c = c.getNext();
+    }
+    return buf.toString();
+  }",115-123,0.9854432,0.95398283,0.95398283
+76,,,2,2,0,ch.qos.logback.core.util.ContentTypeUtil,getSubType,(Ljava/lang/String;)Ljava/lang/String;,6,9,66.7%,"public static String getSubType(String contextType) {
+    if (contextType == null) {
+      return null;
+    }
+    int index = contextType.indexOf('/');
+    if (index == -1) {
+      return null;
+    } else {
+      int subTypeStartIndex = index + 1;
+      if (subTypeStartIndex < contextType.length()) {
+        return contextType.substring(subTypeStartIndex);
+      } else {
+        return null;
+      }
+    }
+  }",31-46,0.770275,0.9417347,0.9417347
+77,,,2,2,0,ch.qos.logback.core.joran.spi.ConfigurationWatchList,addAsFileToWatch,(Ljava/net/URL;)V,5,5,100.0%,"private void addAsFileToWatch(URL url) {
+    File file = convertToFile(url);
+    if (file != null) {
+      fileWatchList.add(file);
+      lastModifiedList.add(file.lastModified());
+    }
+  }",51-57,0.9862058,0.92454225,0.92454225
+78,,,2,2,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,fullPathMatch,(Lch/qos/logback/core/joran/spi/ElementPath;)Ljava/util/List;,5,5,100.0%,"List<Action> fullPathMatch(ElementPath elementPath) {
+    for (ElementSelector selector : rules.keySet()) {
+       if(selector.fullPathMatch(elementPath))
+         return rules.get(selector);
+    }
+    return null;
+  }",100-106,0.9800632,0.96319664,0.96319664
+79,,,2,1,1,ch.qos.logback.core.BasicStatusManager,getCopyOfStatusList,()Ljava/util/List;,4,4,100.0%,"public List<Status> getCopyOfStatusList() {
+    synchronized (statusListLock) {
+      List<Status> tList = new ArrayList<Status>(statusList);
+      tList.addAll(tailBuffer.asList());
+      return tList;
+    }
+  }",76-82,0.9849588,0.94229954,0.94229954
+80,,,2,2,0,ch.qos.logback.core.joran.event.SaxEventRecorder,endElement,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V,4,4,100.0%,"public void endElement(String namespaceURI, String localName, String qName) {
+    saxEventList
+        .add(new EndEvent(namespaceURI, localName, qName, getLocator()));
+    globalElementPath.pop();
+  }",140-144,0.99400496,0.9344699,0.9344699
+81,,,2,2,0,ch.qos.logback.core.spi.AbstractComponentTracker,getFromEitherMap,(Ljava/lang/String;)Lch/qos/logback/core/spi/AbstractComponentTracker$Entry;,4,4,100.0%,"private Entry<C> getFromEitherMap(String key) {
+    Entry<C> entry = liveMap.get(key);
+    if (entry != null)
+      return entry;
+    else {
+      return lingerersMap.get(key);
+    }
+  }",88-95,0.942653,0.82652247,0.82652247
+82,,,2,2,0,ch.qos.logback.classic.spi.LoggingEvent,getThreadName,()Ljava/lang/String;,3,3,100.0%,"public String getThreadName() {
+    if (threadName == null) {
+      threadName = (Thread.currentThread()).getName();
+    }
+    return threadName;
+  }",159-164,0.98837775,0.9436194,0.9436194
+83,,,2,2,0,ch.qos.logback.core.subst.Parser,peekAtCurentToken,()Lch/qos/logback/core/subst/Token;,3,3,100.0%,"Token peekAtCurentToken() {
+    if (pointer < tokenList.size()) {
+      return tokenList.get(pointer);
+    }
+    return null;
+  }",154-159,0.99295,0.8989346,0.8989346
+84,,,2,2,0,ch.qos.logback.core.util.ContextUtil,addFrameworkPackage,(Ljava/util/List;Ljava/lang/String;)V,3,3,100.0%,"public void addFrameworkPackage(List<String> frameworkPackages, String packageName) {
+    if (!frameworkPackages.contains(packageName)) {
+      frameworkPackages.add(packageName);
+    }
+  }",102-106,0.9610214,0.98264945,0.98264945
+85,,,2,2,0,ch.qos.logback.classic.util.LogbackMDCAdapter,getPropertyMap,()Ljava/util/Map;,2,2,100.0%,"public Map<String, String> getPropertyMap() {
+    lastOperation.set(READ_OPERATION);
+    return copyOnInheritThreadLocal.get();
+  }",160-163,0.9955,0.9136889,0.9136889
+86,,,2,2,0,ch.qos.logback.core.pattern.DynamicConverter,getFirstOption,()Ljava/lang/String;,2,3,66.7%,"public String getFirstOption() {
+    if (optionList == null || optionList.size() == 0) {
+      return null;
+    } else {
+      return optionList.get(0);
+    }
+  }",65-71,0.91756463,0.92986566,0.92986566
+87,,,2,2,0,ch.qos.logback.core.spi.AbstractComponentTracker,getComponentCount,()I,1,1,100.0%,"public int getComponentCount() {
+    return liveMap.size() + lingerersMap.size();
+  }",78-80,0.9950281,0.9327938,0.9327938
+88,,,2,1,1,ch.qos.logback.core.status.StatusBase,hasChildren,()Z,1,1,100.0%,"public synchronized boolean hasChildren() {
+    return ((childrenList != null) && (childrenList.size() > 0));
+  }",53-55,0.9902586,0.9216864,0.9216864
+89,,,1,1,0,ch.qos.logback.classic.LoggerContext,getLogger,(Ljava/lang/String;)Lch/qos/logback/classic/Logger;,23,25,92.0%,"public final Logger getLogger(final Class clazz) {
+    return getLogger(clazz.getName());
+  }",101-103,0.99311405,0.9316578,0.9316578
+90,,,1,1,0,ch.qos.logback.core.subst.Tokenizer,tokenize,()Ljava/util/List;,15,17,88.2%,"List<Token> tokenize() throws ScanException {
+    List<Token> tokenList = new ArrayList<Token>();
+    StringBuilder buf = new StringBuilder();
+
+    while (pointer < patternLength) {
+      char c = pattern.charAt(pointer);
+      pointer++;
+
+      switch (state) {
+        case LITERAL_STATE:
+          handleLiteralState(c, tokenList, buf);
+          break;
+        case START_STATE:
+          handleStartState(c, tokenList, buf);
+          break;
+        case DEFAULT_VAL_STATE:
+          handleDefaultValueState(c, tokenList, buf);
+        default:
+      }
+    }
+    // EOS
+    switch (state) {
+      case LITERAL_STATE:
+        addLiteralToken(tokenList, buf);
+        break;
+      case START_STATE:
+        throw new ScanException(""Unexpected end of pattern string"");
+    }
+    return tokenList;
+  }",37-66,0.863899,0.98775804,0.98775804
+91,,,1,1,0,ch.qos.logback.classic.joran.action.RootLoggerAction,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,10,10,100.0%,"public void begin(InterpretationContext ec, String name, Attributes attributes) {
+    inError = false;
+
+    LoggerContext loggerContext = (LoggerContext) this.context;
+    root = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
+
+    String levelStr =  ec.subst(attributes.getValue(ActionConst.LEVEL_ATTRIBUTE));
+    if (!OptionHelper.isEmpty(levelStr)) {
+      Level level = Level.toLevel(levelStr);
+      addInfo(""Setting level of ROOT logger to "" + level);
+      root.setLevel(level);
+    }
+    ec.pushObject(root);
+  }",31-44,0.98452604,0.9602387,0.9602387
+92,,,1,1,0,ch.qos.logback.core.joran.GenericConfigurator,doConfigure,(Lorg/xml/sax/InputSource;)V,10,11,90.9%,"public final void doConfigure(URL url) throws JoranException {
+    InputStream in = null;
+    try {
+      informContextOfURLUsedForConfiguration(getContext(), url);
+      URLConnection urlConnection = url.openConnection();
+      // per http://jira.qos.ch/browse/LBCORE-105
+      // per http://jira.qos.ch/browse/LBCORE-127
+      urlConnection.setUseCaches(false);
+
+      in = urlConnection.getInputStream();
+      doConfigure(in);
+    } catch (IOException ioe) {
+      String errMsg = ""Could not open URL ["" + url + ""]."";
+      addError(errMsg, ioe);
+      throw new JoranException(errMsg, ioe);
+    } finally {
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException ioe) {
+          String errMsg = ""Could not close input stream"";
+          addError(errMsg, ioe);
+          throw new JoranException(errMsg, ioe);
+        }
+      }
+    }
+  }",39-65,0.9092886,0.99675345,0.99675345
+93,,,1,1,0,ch.qos.logback.core.joran.util.PropertySetter,setProperty,(Ljava/beans/PropertyDescriptor;Ljava/lang/String;Ljava/lang/String;)V,10,17,58.8%,"public void setProperty(String name, String value) {
+    if (value == null) {
+      return;
+    }
+
+    name = Introspector.decapitalize(name);
+
+    PropertyDescriptor prop = getPropertyDescriptor(name);
+
+    if (prop == null) {
+      addWarn(""No such property ["" + name + ""] in "" + objClass.getName() + ""."");
+    } else {
+      try {
+        setProperty(prop, name, value);
+      } catch (PropertySetterException ex) {
+        addWarn(""Failed to set property ["" + name + ""] to value \"""" + value
+            + ""\"". "", ex);
+      }
+    }
+  }",107-126,0.9469631,0.987768,0.987768
+94,,,1,1,0,ch.qos.logback.core.util.EnvUtil,isJDK_N_OrHigher,(I)Z,9,11,81.8%,"static private boolean isJDK_N_OrHigher(int n) {
+     List<String> versionList = new ArrayList<String>();
+     // this code should work at least until JDK 10 (assuming n parameter is
+     // always 6 or more)
+     for (int i = 0; i < 5; i++) {
+       versionList.add(""1."" + (n + i));
+     }
+
+     String javaVersion = System.getProperty(""java.version"");
+     if (javaVersion == null) {
+       return false;
+     }
+     for (String v : versionList) {
+       if (javaVersion.startsWith(v))
+         return true;
+     }
+     return false;
+   }",25-42,0.9620234,0.9819626,0.9819626
+95,,overload of an earlier row - skipped,1,1,0,ch.qos.logback.core.joran.GenericConfigurator,doConfigure,(Ljava/io/File;)V,8,16,50.0%,"public final void doConfigure(URL url) throws JoranException {
+    InputStream in = null;
+    try {
+      informContextOfURLUsedForConfiguration(getContext(), url);
+      URLConnection urlConnection = url.openConnection();
+      // per http://jira.qos.ch/browse/LBCORE-105
+      // per http://jira.qos.ch/browse/LBCORE-127
+      urlConnection.setUseCaches(false);
+
+      in = urlConnection.getInputStream();
+      doConfigure(in);
+    } catch (IOException ioe) {
+      String errMsg = ""Could not open URL ["" + url + ""]."";
+      addError(errMsg, ioe);
+      throw new JoranException(errMsg, ioe);
+    } finally {
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException ioe) {
+          String errMsg = ""Could not close input stream"";
+          addError(errMsg, ioe);
+          throw new JoranException(errMsg, ioe);
+        }
+      }
+    }
+  }",39-65,0.9092886,0.99675345,0.99675345
+96,,,1,1,0,ch.qos.logback.core.joran.action.NestedBasicPropertyIA,body,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,8,8,100.0%,"public void body(InterpretationContext ec, String body) {
+
+    String finalBody = ec.subst(body);
+    // get the action data object pushed in isApplicable() method call
+    IADataForBasicProperty actionData = (IADataForBasicProperty) actionDataStack.peek();
+    switch (actionData.aggregationType) {
+    case AS_BASIC_PROPERTY:
+      actionData.parentBean.setProperty(actionData.propertyName, finalBody);
+      break;
+    case AS_BASIC_PROPERTY_COLLECTION:
+      actionData.parentBean
+          .addBasicProperty(actionData.propertyName, finalBody);
+    }
+  }",85-98,0.96088743,0.9887224,0.9887224
+97,,,1,1,0,ch.qos.logback.core.joran.util.ConfigurationWatchListUtil,setMainWatchURL,(Lch/qos/logback/core/Context;Ljava/net/URL;)V,8,9,88.9%,"public static void setMainWatchURL(Context context, URL url) {
+    ConfigurationWatchList cwl = getConfigurationWatchList(context);
+    if (cwl == null) {
+      cwl = new ConfigurationWatchList();
+      cwl.setContext(context);
+      context.putObject(CoreConstants.CONFIGURATION_WATCH_LIST, cwl);
+    } else {
+      cwl.clear();
+    }
+    setConfigurationWatchListResetFlag(context, true);
+    cwl.setMainURL(url);
+  }",36-47,0.9395665,0.99161196,0.99161196
+98,,,1,1,0,ch.qos.logback.classic.net.SMTPAppender,makeSubjectLayout,(Ljava/lang/String;)Lch/qos/logback/core/Layout;,7,8,87.5%,"@Override
+  protected Layout<ILoggingEvent> makeSubjectLayout(String subjectStr) {
+    if(subjectStr == null) {
+      subjectStr = DEFAULT_SUBJECT_PATTERN;
+    }
+    PatternLayout pl = new PatternLayout();
+    pl.setContext(getContext());
+    pl.setPattern(subjectStr);
+    // we don't want a ThrowableInformationConverter appended
+    // to the end of the converter chain
+    // This fixes issue LBCLASSIC-67
+    pl.setPostCompileProcessor(null);
+    pl.start();
+    return pl;
+  }",105-119,0.9861475,0.9521872,0.9521872
+99,,overload of an earlier row - skipped,1,1,0,ch.qos.logback.core.joran.util.PropertySetter,setProperty,(Ljava/lang/String;Ljava/lang/String;)V,7,11,63.6%,"public void setProperty(String name, String value) {
+    if (value == null) {
+      return;
+    }
+
+    name = Introspector.decapitalize(name);
+
+    PropertyDescriptor prop = getPropertyDescriptor(name);
+
+    if (prop == null) {
+      addWarn(""No such property ["" + name + ""] in "" + objClass.getName() + ""."");
+    } else {
+      try {
+        setProperty(prop, name, value);
+      } catch (PropertySetterException ex) {
+        addWarn(""Failed to set property ["" + name + ""] to value \"""" + value
+            + ""\"". "", ex);
+      }
+    }
+  }",107-126,0.9469631,0.987768,0.987768
+100,,,1,0,1,ch.qos.logback.core.BasicStatusManager,fireStatusAddEvent,(Lch/qos/logback/core/status/Status;)V,6,6,100.0%,"private void fireStatusAddEvent(Status status) {
+    synchronized (statusListenerListLock) {
+      for (StatusListener sl : statusListenerList) {
+        sl.addStatusEvent(status);
+      }
+    }
+  }",84-90,0.9826254,0.95137286,0.95137286
+101,,,1,0,1,ch.qos.logback.core.ContextBase,getExecutorService,()Ljava/util/concurrent/ExecutorService;,6,6,100.0%,"public ExecutorService getExecutorService() {
+    if (executorService == null) {
+      synchronized (this) {
+        if (executorService == null) {
+          executorService = ExecutorServiceUtil.newExecutorService();
+        }
+      }
+    }
+    return executorService; 
+  }",155-164,0.9195537,0.99103767,0.99103767
+102,,,1,1,0,ch.qos.logback.core.status.StatusUtil,filterStatusListByTimeThreshold,(Ljava/util/List;J)Ljava/util/List;,6,6,100.0%,"static public List<Status> filterStatusListByTimeThreshold(List<Status> rawList, long threshold) {
+    List<Status> filteredList = new ArrayList<Status>();
+    for (Status s : rawList) {
+      if (s.getDate() >= threshold)
+        filteredList.add(s);
+    }
+    return filteredList;
+  }",57-64,0.9482033,0.9471508,0.9471508
+103,,,1,1,0,ch.qos.logback.core.subst.Parser,E,()Lch/qos/logback/core/subst/Node;,6,7,85.7%,"private Node E() throws ScanException {
+    Node t = T();
+    if (t == null) {
+      return null;
+    }
+    Node eOpt = Eopt();
+    if (eOpt != null) {
+      t.append(eOpt);
+    }
+    return t;
+  }",49-59,0.9307716,0.89423186,0.89423186
+104,,overload of an earlier row - skipped,1,1,0,ch.qos.logback.core.joran.GenericConfigurator,doConfigure,(Ljava/util/List;)V,5,5,100.0%,"public final void doConfigure(URL url) throws JoranException {
+    InputStream in = null;
+    try {
+      informContextOfURLUsedForConfiguration(getContext(), url);
+      URLConnection urlConnection = url.openConnection();
+      // per http://jira.qos.ch/browse/LBCORE-105
+      // per http://jira.qos.ch/browse/LBCORE-127
+      urlConnection.setUseCaches(false);
+
+      in = urlConnection.getInputStream();
+      doConfigure(in);
+    } catch (IOException ioe) {
+      String errMsg = ""Could not open URL ["" + url + ""]."";
+      addError(errMsg, ioe);
+      throw new JoranException(errMsg, ioe);
+    } finally {
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException ioe) {
+          String errMsg = ""Could not close input stream"";
+          addError(errMsg, ioe);
+          throw new JoranException(errMsg, ioe);
+        }
+      }
+    }
+  }",39-65,0.9092886,0.99675345,0.99675345
+105,,,1,1,0,ch.qos.logback.core.net.SMTPAppenderBase,checkEntryConditions,()Z,5,14,35.7%,"public boolean checkEntryConditions() {
+    if (!this.started) {
+      addError(""Attempting to append to a non-started appender: ""
+              + this.getName());
+      return false;
+    }
+
+    if (this.mimeMsg == null) {
+      addError(""Message object not configured."");
+      return false;
+    }
+
+    if (this.eventEvaluator == null) {
+      addError(""No EventEvaluator is set for appender ["" + name + ""]."");
+      return false;
+    }
+
+    if (this.layout == null) {
+      addError(""No layout set for appender named [""
+              + name
+              + ""]. For more information, please visit http://logback.qos.ch/codes.html#smtp_no_layout"");
+      return false;
+    }
+    return true;
+  }",266-290,0.9241298,0.9943455,0.9943455
+106,,,1,0,1,ch.qos.logback.core.spi.AbstractComponentTracker,removeStaleComponents,(J)V,5,5,100.0%,"public synchronized void removeStaleComponents(long now) {
+    if (isTooSoonForRemovalIteration(now)) return;
+    removeExcedentComponents();
+    removeStaleComponentsFromMainMap(now);
+    removeStaleComponentsFromLingerersMap(now);
+  }",152-157,0.985534,0.9595797,0.9595797
+107,,,1,1,0,ch.qos.logback.core.spi.ContextAwareBase,addStatus,(Lch/qos/logback/core/status/Status;)V,5,8,62.5%,"public void addStatus(Status status) {
+    if (context == null) {
+      if (noContextWarning++ == 0) {
+        System.out.println(""LOGBACK: No context given for "" + this);
+      }
+      return;
+    }
+    StatusManager sm = context.getStatusManager();
+    if (sm != null) {
+      sm.add(status);
+    }
+  }",70-81,0.9466241,0.9867216,0.9867216
+108,,,1,1,0,ch.qos.logback.core.spi.ContextAwareImpl,addStatus,(Lch/qos/logback/core/status/Status;)V,5,8,62.5%,"public void addStatus(Status status) {
+    if (context == null) {
+      if (noContextWarning++ == 0) {
+        System.out.println(""LOGBACK: No context given for "" + this);
+      }
+      return;
+    }
+    StatusManager sm = context.getStatusManager();
+    if (sm != null) {
+      sm.add(status);
+    }
+  }",65-76,0.9466241,0.9867216,0.9867216
+109,,,1,0,1,ch.qos.logback.core.util.CachingDateFormatter,format,(J)Ljava/lang/String;,5,5,100.0%,"public final String format(long now) {
+
+    // SimpleDateFormat is not thread safe.
+
+    // See also the discussion in http://jira.qos.ch/browse/LBCLASSIC-36
+    // DateFormattingThreadedThroughputCalculator and SelectiveDateFormattingRunnable
+    // are also note worthy
+
+    // The now == lastTimestamp guard minimizes synchronization
+    synchronized (this) {
+      if (now != lastTimestamp) {
+        lastTimestamp = now;
+        cachedStr = sdf.format(new Date(now));
+      }
+      return cachedStr;
+    }
+  }",37-53,0.9784399,0.96512765,0.96512765
+110,,,1,0,1,ch.qos.logback.classic.Logger,addAppender,(Lch/qos/logback/core/Appender;)V,4,4,100.0%,"public synchronized void addAppender(Appender<ILoggingEvent> newAppender) {
+    if (aai == null) {
+      aai = new AppenderAttachableImpl<ILoggingEvent>();
+    }
+    aai.addAppender(newAppender);
+  }",221-226,0.9863295,0.95642257,0.95642257
+111,,,1,1,0,ch.qos.logback.classic.net.SMTPAppender,subAppend,(Lch/qos/logback/core/helpers/CyclicBuffer;Lch/qos/logback/classic/spi/ILoggingEvent;)V,4,5,80.0%,"protected void subAppend(CyclicBuffer<ILoggingEvent> cb, ILoggingEvent event) {
+    if(includeCallerData) {
+      event.getCallerData();
+    }
+    event.prepareForDeferredProcessing();
+    cb.add(event);
+  }",79-85,0.99377555,0.93882054,0.93882054
+112,,,1,1,0,ch.qos.logback.core.joran.spi.DefaultNestedComponentRegistry,add,(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)V,4,4,100.0%,"public void add(Class<?> hostClass, String propertyName, Class<?> componentClass) {
+    HostClassAndPropertyDouble hpDouble = new HostClassAndPropertyDouble(
+        hostClass, propertyName.toLowerCase());
+    defaultComponentMap.put(hpDouble, componentClass);
+  }",29-33,0.99183667,0.92150843,0.92150843
+113,,,1,1,0,ch.qos.logback.core.pattern.parser.Compiler,createConverter,(Lch/qos/logback/core/pattern/parser/SimpleKeywordNode;)Lch/qos/logback/core/pattern/DynamicConverter;,4,9,44.4%,"@SuppressWarnings(""unchecked"")
+  DynamicConverter<E> createConverter(SimpleKeywordNode kn) {
+    String keyword = (String) kn.getValue();
+    String converterClassStr = (String) converterMap.get(keyword);
+
+    if (converterClassStr != null) {
+      try {
+        return (DynamicConverter) OptionHelper.instantiateByClassName(
+                converterClassStr, DynamicConverter.class, context);
+      } catch (Exception e) {
+        addError(""Failed to instantiate converter class ["" + converterClassStr
+                + ""] for keyword [""+keyword+""]"", e);
+        return null;
+      }
+    } else {
+      addError(""There is no conversion class registered for conversion word [""
+              + keyword + ""]"");
+      return null;
+    }
+  }",100-119,0.96431005,0.9847493,0.9847493
+114,,,1,1,0,ch.qos.logback.classic.net.SMTPAppender,eventMarksEndOfLife,(Lch/qos/logback/classic/spi/ILoggingEvent;)Z,3,4,75.0%,"protected boolean eventMarksEndOfLife(ILoggingEvent eventObject) {
+    Marker marker = eventObject.getMarker();
+    if(marker == null)
+      return false;
+
+    return marker.contains(ClassicConstants.FINALIZE_SESSION_MARKER);
+  }",96-102,0.995251,0.9159971,0.9159971
+115,,,1,1,0,ch.qos.logback.core.joran.event.SaxEventRecorder,getTagName,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,3,4,75.0%,"String getTagName(String localName, String qName) {
+    String tagName = localName;
+    if ((tagName == null) || (tagName.length() < 1)) {
+      tagName = qName;
+    }
+    return tagName;
+  }",146-152,0.96990055,0.9748695,0.9748695
+116,,,1,1,0,ch.qos.logback.core.joran.spi.ConfigurationWatchList,convertToFile,(Ljava/net/URL;)Ljava/io/File;,3,5,60.0%,"@SuppressWarnings(""deprecation"")
+  File convertToFile(URL url) {
+    String protocol = url.getProtocol();
+    if (""file"".equals(protocol)) {
+      return new File(URLDecoder.decode(url.getFile()));
+    } else {
+      addInfo(""URL ["" + url + ""] is not of type file"");
+      return null;
+    }
+  }",84-93,0.99422956,0.93945044,0.93945044
+117,,,1,1,0,ch.qos.logback.core.joran.spi.ElementPath,duplicate,()Lch/qos/logback/core/joran/spi/ElementPath;,3,3,100.0%,"public ElementPath duplicate() {
+    ElementPath p = new ElementPath();
+    p.partList.addAll(this.partList);
+    return p;
+  }",43-47,0.9922052,0.92012745,0.92012745
+118,,,1,1,0,ch.qos.logback.core.joran.spi.InterpretationContext,getProperty,(Ljava/lang/String;)Ljava/lang/String;,3,4,75.0%,"public String getProperty(String key) {
+    String v = propertiesMap.get(key);
+    if (v != null) {
+      return v;
+    } else {
+      return context.getProperty(key);
+    }
+  }",146-153,0.8217363,0.82711065,0.82711065
+119,,,1,1,0,ch.qos.logback.core.joran.spi.Interpreter,getTagName,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,3,4,75.0%,"String getTagName(String localName, String qName) {
+    String tagName = localName;
+
+    if ((tagName == null) || (tagName.length() < 1)) {
+      tagName = qName;
+    }
+
+    return tagName;
+  }",211-219,0.9767259,0.9717305,0.9717305
+120,,,1,1,0,ch.qos.logback.core.spi.AppenderAttachableImpl,addAppender,(Lch/qos/logback/core/Appender;)V,3,4,75.0%,"public void addAppender(Appender<E> newAppender) {
+    if (newAppender == null) {
+      throw new IllegalArgumentException(""Null argument disallowed"");
+    }
+     appenderList.addIfAbsent(newAppender);
+  }",35-40,0.9915742,0.94724834,0.94724834
+121,,,1,1,0,ch.qos.logback.core.subst.NodeToStringTransformer,transform,()Ljava/lang/String;,3,3,100.0%,"public String transform() {
+    StringBuilder stringBuilder = new StringBuilder();
+    compileNode(node, stringBuilder);
+    return stringBuilder.toString();
+  }",50-54,0.9875559,0.9261699,0.9261699
+122,,,1,1,0,ch.qos.logback.classic.LoggerContext,getTurboFilterChainDecision_0_3OrMore,(Lorg/slf4j/Marker;Lch/qos/logback/classic/Logger;Lch/qos/logback/classic/Level;Ljava/lang/String;[Ljava/lang/Object;Ljava/lang/Throwable;)Lch/qos/logback/core/spi/FilterReply;,2,3,66.7%,"final FilterReply getTurboFilterChainDecision_0_3OrMore(final Marker marker,
+                                                          final Logger logger, final Level level, final String format,
+                                                          final Object[] params, final Throwable t) {
+    if (turboFilterList.size() == 0) {
+      return FilterReply.NEUTRAL;
+    }
+    return turboFilterList.getTurboFilterChainDecision(marker, logger, level,
+            format, params, t);
+  }",246-254,0.44737887,0.6887447,0.6887447
+123,,,1,1,0,ch.qos.logback.core.ContextBase,putObject,(Ljava/lang/String;Ljava/lang/Object;)V,2,2,100.0%,"public void putObject(String key, Object value) {
+    objectMap.put(key, value);
+  }",93-95,0.9934831,0.9250665,0.9250665
+124,,,1,1,0,ch.qos.logback.core.ContextBase,putProperty,(Ljava/lang/String;Ljava/lang/String;)V,2,2,100.0%,"public void putProperty(String key, String val) {
+    this.propertyMap.put(key, val);
+  }",71-73,0.991365,0.9409783,0.9409783
+125,,overload of an earlier row - skipped,1,1,0,ch.qos.logback.core.joran.GenericConfigurator,doConfigure,(Ljava/io/InputStream;)V,2,2,100.0%,"public final void doConfigure(URL url) throws JoranException {
+    InputStream in = null;
+    try {
+      informContextOfURLUsedForConfiguration(getContext(), url);
+      URLConnection urlConnection = url.openConnection();
+      // per http://jira.qos.ch/browse/LBCORE-105
+      // per http://jira.qos.ch/browse/LBCORE-127
+      urlConnection.setUseCaches(false);
+
+      in = urlConnection.getInputStream();
+      doConfigure(in);
+    } catch (IOException ioe) {
+      String errMsg = ""Could not open URL ["" + url + ""]."";
+      addError(errMsg, ioe);
+      throw new JoranException(errMsg, ioe);
+    } finally {
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException ioe) {
+          String errMsg = ""Could not close input stream"";
+          addError(errMsg, ioe);
+          throw new JoranException(errMsg, ioe);
+        }
+      }
+    }
+  }",39-65,0.9092886,0.99675345,0.99675345
+126,,overload of an earlier row - skipped,1,1,0,ch.qos.logback.core.joran.GenericConfigurator,doConfigure,(Ljava/lang/String;)V,2,2,100.0%,"public final void doConfigure(URL url) throws JoranException {
+    InputStream in = null;
+    try {
+      informContextOfURLUsedForConfiguration(getContext(), url);
+      URLConnection urlConnection = url.openConnection();
+      // per http://jira.qos.ch/browse/LBCORE-105
+      // per http://jira.qos.ch/browse/LBCORE-127
+      urlConnection.setUseCaches(false);
+
+      in = urlConnection.getInputStream();
+      doConfigure(in);
+    } catch (IOException ioe) {
+      String errMsg = ""Could not open URL ["" + url + ""]."";
+      addError(errMsg, ioe);
+      throw new JoranException(errMsg, ioe);
+    } finally {
+      if (in != null) {
+        try {
+          in.close();
+        } catch (IOException ioe) {
+          String errMsg = ""Could not close input stream"";
+          addError(errMsg, ioe);
+          throw new JoranException(errMsg, ioe);
+        }
+      }
+    }
+  }",39-65,0.9092886,0.99675345,0.99675345
+127,,,1,1,0,ch.qos.logback.core.joran.action.NestedBasicPropertyIA,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,2,2,100.0%,"public void end(InterpretationContext ec, String tagName) {
+    // pop the action data object pushed in isApplicable() method call
+    actionDataStack.pop();
+  }",100-103,0.9886242,0.89717853,0.89717853
+128,,,1,1,0,ch.qos.logback.core.joran.event.SaxEventRecorder,isSpaceOnly,(Ljava/lang/String;)Z,2,2,100.0%,"boolean isSpaceOnly(String bodyStr) {
+    String bodyTrimmed = bodyStr.trim();
+    return (bodyTrimmed.length() == 0);
+  }",127-130,0.99331105,0.93014526,0.93014526
+129,,,1,1,0,ch.qos.logback.core.joran.spi.ElementPath,push,(Ljava/lang/String;)V,2,2,100.0%,"public void push(String s) {
+    partList.add(s);
+  }",82-84,0.99402595,0.91183096,0.91183096
+130,,,1,1,0,ch.qos.logback.core.joran.spi.ElementSelector,isContainedIn,(Lch/qos/logback/core/joran/spi/ElementPath;)Z,2,3,66.7%,"public boolean isContainedIn(ElementPath p) {
+    if(p == null) {
+      return false;
+    }
+    return p.toStableString().contains(toStableString());
+  }",98-103,0.9946677,0.92720103,0.92720103
+131,,,1,1,0,ch.qos.logback.core.joran.spi.InterpretationContext,pushObject,(Ljava/lang/Object;)V,2,2,100.0%,"public void pushObject(Object o) {
+    objectStack.push(o);
+  }",102-104,0.99428684,0.91602176,0.91602176
+132,,,1,1,0,ch.qos.logback.core.joran.spi.Interpreter,addImplicitAction,(Lch/qos/logback/core/joran/action/ImplicitAction;)V,2,2,100.0%,"public void addImplicitAction(ImplicitAction ia) {
+    implicitActions.add(ia);
+  }",221-223,0.9946715,0.91445434,0.91445434
+133,,,1,1,0,ch.qos.logback.core.joran.spi.Interpreter,pushEmptyActionList,()V,2,2,100.0%,"private void pushEmptyActionList() {
+    actionListStack.add(EMPTY_LIST);
+  }",160-162,0.99405384,0.9150905,0.9150905
+134,,,1,1,0,ch.qos.logback.core.pattern.Converter,write,(Ljava/lang/StringBuilder;Ljava/lang/Object;)V,2,2,100.0%,"public void write(StringBuilder buf, E event) {
+    buf.append(convert(event));
+  }",41-43,0.99259776,0.9156449,0.9156449
+135,,,1,1,0,ch.qos.logback.core.subst.NodeToStringTransformer,handleLiteral,(Lch/qos/logback/core/subst/Node;Ljava/lang/StringBuilder;)V,2,2,100.0%,"private void handleLiteral(Node n, StringBuilder stringBuilder) {
+    stringBuilder.append((String) n.payload);
+  }",118-120,0.9909186,0.92236954,0.92236954
+136,,,1,1,0,ch.qos.logback.core.util.Loader$1,run,()Ljava/lang/Boolean;,2,4,50.0%,"public Boolean run() {
+                try {
+                  AccessController.checkPermission(
+                          new RuntimePermission(""getClassLoader""));
+                  return true;
+                } catch (AccessControlException e) {
+                  return false;
+                }
+              }",49-57,0.8761066,0.99107194,0.99107194
+137,,,1,1,0,ch.qos.logback.core.AppenderBase,toString,()Ljava/lang/String;,1,1,100.0%,"public String toString() {
+    return this.getClass().getName() + ""["" + name + ""]"";
+  }",117-119,0.9951539,0.916477,0.916477
+138,,,1,1,0,ch.qos.logback.core.ContextBase,getObject,(Ljava/lang/String;)Ljava/lang/Object;,1,1,100.0%,"public Object getObject(String key) {
+    return objectMap.get(key);
+  }",89-91,0.99559885,0.92095685,0.92095685
+139,,,1,1,0,ch.qos.logback.core.joran.action.Action,toString,()Ljava/lang/String;,1,1,100.0%,"public String toString() {
+    return this.getClass().getName();
+  }",76-78,0.995917,0.9221158,0.9221158
+140,,,1,1,0,ch.qos.logback.core.joran.spi.ElementPath,get,(I)Ljava/lang/String;,1,1,100.0%,"public String get(int i) {
+    return (String) partList.get(i);
+  }",86-88,0.99687463,0.92126435,0.92126435
+141,,,1,1,0,ch.qos.logback.core.joran.spi.ElementPath,size,()I,1,1,100.0%,"public int size() {
+    return partList.size();
+  }",105-107,0.992837,0.91478556,0.91478556
+142,,,1,1,0,ch.qos.logback.core.joran.spi.InterpretationContext,isEmpty,()Z,1,1,100.0%,"public boolean isEmpty() {
+    return objectStack.isEmpty();
+  }",94-96,0.99395317,0.9312761,0.9312761
+143,,,1,1,0,ch.qos.logback.core.joran.spi.InterpretationContext,peekObject,()Ljava/lang/Object;,1,1,100.0%,"public Object peekObject() {
+    return objectStack.peek();
+  }",98-100,0.9923071,0.9060474,0.9060474
+144,,,1,1,0,ch.qos.logback.core.joran.spi.InterpretationContext,popObject,()Ljava/lang/Object;,1,1,100.0%,"public Object popObject() {
+    return objectStack.pop();
+  }",106-108,0.99264777,0.9058565,0.9058565
+145,,,1,1,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,isKleeneStar,(Ljava/lang/String;)Z,1,1,100.0%,"private boolean isKleeneStar(String last) {
+    return KLEENE_STAR.equals(last);
+  }",157-159,0.9958832,0.9210097,0.9210097
+146,,,1,1,0,ch.qos.logback.core.spi.AbstractComponentTracker$1,isSlatedForRemoval,(Lch/qos/logback/core/spi/AbstractComponentTracker$Entry;J)Z,1,1,100.0%,"public boolean isSlatedForRemoval(Entry<C> entry, long timestamp) {
+      return (liveMap.size() > maxComponents);
+    }",188-190,0.9928601,0.9130679,0.9130679
+147,,,1,1,0,ch.qos.logback.core.spi.AbstractComponentTracker$2,isSlatedForRemoval,(Lch/qos/logback/core/spi/AbstractComponentTracker$Entry;J)Z,1,1,100.0%,"public boolean isSlatedForRemoval(Entry<C> entry, long timestamp) {
+      return (liveMap.size() > maxComponents);
+    }",188-190,0.9928601,0.9130679,0.9130679
+148,,,1,1,0,ch.qos.logback.core.util.OptionHelper,isEmpty,(Ljava/lang/String;)Z,1,1,100.0%,"public static boolean isEmpty(String str) {
+    return ((str == null) || CoreConstants.EMPTY_STRING.equals(str));
+  }",272-274,0.9934368,0.92950195,0.92950195
+149,,,0,0,0,ch.qos.logback.classic.joran.JoranConfigurator,addInstanceRules,(Lch/qos/logback/core/joran/spi/RuleStore;)V,25,25,100.0%,"@Override
+  public void addInstanceRules(RuleStore rs) {
+    // parent rules already added
+    super.addInstanceRules(rs);
+
+    rs.addRule(new ElementSelector(""configuration""), new ConfigurationAction());
+
+    rs.addRule(new ElementSelector(""configuration/contextName""),
+        new ContextNameAction());
+      rs.addRule(new ElementSelector(""configuration/contextListener""),
+        new LoggerContextListenerAction());
+    rs.addRule(new ElementSelector(""configuration/insertFromJNDI""),
+        new InsertFromJNDIAction());
+    rs.addRule(new ElementSelector(""configuration/evaluator""), new EvaluatorAction());
+
+    rs.addRule(new ElementSelector(""configuration/appender/sift""), new SiftAction());
+    rs.addRule(new ElementSelector(""configuration/appender/sift/*""), new NOPAction());
+
+    rs.addRule(new ElementSelector(""configuration/logger""), new LoggerAction());
+    rs.addRule(new ElementSelector(""configuration/logger/level""), new LevelAction());
+
+    rs.addRule(new ElementSelector(""configuration/root""), new RootLoggerAction());
+    rs.addRule(new ElementSelector(""configuration/root/level""), new LevelAction());
+    rs.addRule(new ElementSelector(""configuration/logger/appender-ref""),
+        new AppenderRefAction());
+    rs.addRule(new ElementSelector(""configuration/root/appender-ref""),
+        new AppenderRefAction());
+    
+    // add if-then-else support
+    rs.addRule(new ElementSelector(""*/if""), new IfAction());
+    rs.addRule(new ElementSelector(""*/if/then""), new ThenAction());
+    rs.addRule(new ElementSelector(""*/if/then/*""), new NOPAction());
+    rs.addRule(new ElementSelector(""*/if/else""), new ElseAction());
+    rs.addRule(new ElementSelector(""*/if/else/*""), new NOPAction());
+    
+    // add jmxConfigurator only if we have JMX available.
+    // If running under JDK 1.4 (retrotranslateed logback) then we
+    // might not have JMX.
+    if (PlatformInfo.hasJMXObjectName()) {
+      rs.addRule(new ElementSelector(""configuration/jmxConfigurator""),
+          new JMXConfiguratorAction());
+    }
+    rs.addRule(new ElementSelector(""configuration/include""), new IncludeAction());
+
+    rs.addRule(new ElementSelector(""configuration/consolePlugin""),
+        new ConsolePluginAction());
+    
+    rs.addRule(new ElementSelector(""configuration/receiver""),
+        new ReceiverAction());
+    
+  }",38-88,0.8613441,0.9891696,0.9891696
+150,,,0,0,0,ch.qos.logback.core.joran.JoranConfiguratorBase,addInstanceRules,(Lch/qos/logback/core/joran/spi/RuleStore;)V,13,13,100.0%,"@Override
+  protected void addInstanceRules(RuleStore rs) {
+
+    // is ""configuration/variable"" referenced in the docs?
+    rs.addRule(new ElementSelector(""configuration/variable""), new PropertyAction());
+    rs.addRule(new ElementSelector(""configuration/property""), new PropertyAction());
+
+    rs.addRule(new ElementSelector(""configuration/substitutionProperty""),
+        new PropertyAction());
+
+    rs.addRule(new ElementSelector(""configuration/timestamp""), new TimestampAction());
+
+    rs.addRule(new ElementSelector(""configuration/define""), new DefinePropertyAction());
+
+    // the contextProperty pattern is deprecated. It is undocumented
+    // and will be dropped in future versions of logback
+    rs.addRule(new ElementSelector(""configuration/contextProperty""),
+        new ContextPropertyAction());
+
+    rs.addRule(new ElementSelector(""configuration/conversionRule""),
+        new ConversionRuleAction());
+
+    rs.addRule(new ElementSelector(""configuration/statusListener""),
+        new StatusListenerAction());
+
+    rs.addRule(new ElementSelector(""configuration/appender""), new AppenderAction());
+    rs.addRule(new ElementSelector(""configuration/appender/appender-ref""),
+        new AppenderRefAction());
+    rs.addRule(new ElementSelector(""configuration/newRule""), new NewRuleAction());
+    rs.addRule(new ElementSelector(""*/param""), new ParamAction());
+  }",57-87,0.85994005,0.98756266,0.98756266
+151,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,start,()V,12,19,63.2%,"public void start() {
+
+    if (cbTracker == null) {
+      cbTracker = new CyclicBufferTracker<E>();
+    }
+
+    Session session = null;
+    if (sessionViaJNDI)
+      session = lookupSessionInJNDI();
+    else
+      session = buildSessionFromProperties();
+
+    if (session == null) {
+      addError(""Failed to obtain javax.mail.Session. Cannot start."");
+      return;
+    }
+    mimeMsg = new MimeMessage(session);
+
+    try {
+      if (from != null) {
+        mimeMsg.setFrom(getAddress(from));
+      } else {
+        mimeMsg.setFrom();
+      }
+
+      subjectLayout = makeSubjectLayout(subjectStr);
+
+      started = true;
+
+    } catch (MessagingException e) {
+      addError(""Could not activate SMTPAppender options."", e);
+    }
+  }",115-147,0.9547731,0.9865596,0.9865596
+152,,,0,0,0,ch.qos.logback.core.pattern.parser.Compiler,compile,()Lch/qos/logback/core/pattern/Converter;,12,30,40.0%,"Converter<E> compile() {
+    head = tail = null;
+    for (Node n = top; n != null; n = n.next) {
+      switch (n.type) {
+        case Node.LITERAL:
+          addToList(new LiteralConverter<E>((String) n.getValue()));
+          break;
+        case Node.COMPOSITE_KEYWORD:
+          CompositeNode cn = (CompositeNode) n;
+          CompositeConverter<E> compositeConverter = createCompositeConverter(cn);
+          if(compositeConverter == null) {
+            addError(""Failed to create converter for [%""+cn.getValue()+""] keyword"");
+            addToList(new LiteralConverter<E>(""%PARSER_ERROR[""+cn.getValue()+""]""));
+            break;
+          }
+          compositeConverter.setFormattingInfo(cn.getFormatInfo());
+          compositeConverter.setOptionList(cn.getOptions());
+          Compiler<E> childCompiler = new Compiler<E>(cn.getChildNode(),
+                  converterMap);
+          childCompiler.setContext(context);
+          Converter<E> childConverter = childCompiler.compile();
+          compositeConverter.setChildConverter(childConverter);
+          addToList(compositeConverter);
+          break;
+        case Node.SIMPLE_KEYWORD:
+          SimpleKeywordNode kn = (SimpleKeywordNode) n;
+          DynamicConverter<E> dynaConverter = createConverter(kn);
+          if (dynaConverter != null) {
+            dynaConverter.setFormattingInfo(kn.getFormatInfo());
+            dynaConverter.setOptionList(kn.getOptions());
+            addToList(dynaConverter);
+          } else {
+            // if the appropriate dynaconverter cannot be found, then replace
+            // it with a dummy LiteralConverter indicating an error.
+            Converter<E> errConveter = new LiteralConverter<E>(""%PARSER_ERROR[""
+                    + kn.getValue() + ""]"");
+            addStatus(new ErrorStatus(""["" + kn.getValue()
+                    + ""] is not a valid conversion word"", this));
+            addToList(errConveter);
+          }
+
+      }
+    }
+    return head;
+  }",38-82,0.8895271,0.9955096,0.9955096
+153,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,startElement,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,11,13,84.6%,"public void startElement(StartEvent se) {
+    setDocumentLocator(se.getLocator());
+    startElement(se.namespaceURI, se.localName, se.qName, se.attributes);
+  }",127-130,0.9944382,0.94086486,0.94086486
+154,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,addBasicProperty,(Ljava/lang/String;Ljava/lang/String;)V,11,17,64.7%,"public void addBasicProperty(String name, String strValue) {
+
+    if (strValue == null) {
+      return;
+    }
+
+    name = capitalizeFirstLetter(name);
+    Method adderMethod = findAdderMethod(name);
+
+    if (adderMethod == null) {
+      addError(""No adder for property ["" + name + ""]."");
+      return;
+    }
+
+    Class<?>[] paramTypes = adderMethod.getParameterTypes();
+    isSanityCheckSuccessful(name, adderMethod, paramTypes, strValue);
+
+    Object arg;
+    try {
+      arg = StringToObjectConverter.convertArg(this, strValue, paramTypes[0]);
+    } catch (Throwable t) {
+      addError(""Conversion to type ["" + paramTypes[0] + ""] failed. "", t);
+      return;
+    }
+    if (arg != null) {
+      invokeMethodWithSingleParameterOnThisObject(adderMethod, strValue);
+    }
+  }",301-328,0.93065846,0.98788697,0.98788697
+155,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,computeAggregationType,(Ljava/lang/String;)Lch/qos/logback/core/util/AggregationType;,10,12,83.3%,"public AggregationType computeAggregationType(String name) {
+    String cName = capitalizeFirstLetter(name);
+
+    Method addMethod = findAdderMethod(cName);
+
+    // if the
+    if (addMethod != null) {
+      AggregationType type = computeRawAggregationType(addMethod);
+      switch (type) {
+      case NOT_FOUND:
+        return AggregationType.NOT_FOUND;
+      case AS_BASIC_PROPERTY:
+        return AggregationType.AS_BASIC_PROPERTY_COLLECTION;
+      case AS_COMPLEX_PROPERTY:
+        return AggregationType.AS_COMPLEX_PROPERTY_COLLECTION;
+      }
+    }
+
+    Method setterMethod = findSetterMethod(name);
+    if (setterMethod != null) {
+      return computeRawAggregationType(setterMethod);
+    } else {
+      // we have failed
+      return AggregationType.NOT_FOUND;
+    }
+  }",174-199,0.8635827,0.9883827,0.9883827
+156,,,0,0,0,ch.qos.logback.core.status.StatusUtil,containsMatch,(JILjava/lang/String;)Z,10,11,90.9%,"public boolean containsMatch(long threshold, int level, String regex) {
+    List<Status> filteredList = filterStatusListByTimeThreshold(sm.getCopyOfStatusList(), threshold);
+    Pattern p = Pattern.compile(regex);
+
+    for (Status status : filteredList) {
+      if (level != status.getLevel()) {
+        continue;
+      }
+      String msg = status.getMessage();
+      Matcher matcher = p.matcher(msg);
+      if (matcher.lookingAt()) {
+        return true;
+      }
+    }
+    return false;
+  }",107-122,0.94494015,0.990645,0.990645
+157,,,0,0,0,ch.qos.logback.core.helpers.CyclicBuffer,add,(Ljava/lang/Object;)V,8,8,100.0%,"public void add(E event) {
+    ea[last] = event;
+    if (++last == maxSize)
+      last = 0;
+
+    if (numElems < maxSize)
+      numElems++;
+    else if (++first == maxSize)
+      first = 0;
+  }",80-89,0.97354376,0.9749679,0.9749679
+158,,,0,0,0,ch.qos.logback.core.helpers.CyclicBuffer,get,()Ljava/lang/Object;,8,8,100.0%,"public E get(int i) {
+    if (i < 0 || i >= numElems)
+      return null;
+
+    return ea[(first + i) % maxSize];
+  }",96-101,0.9910944,0.8890833,0.8890833
+159,,,0,0,0,ch.qos.logback.core.joran.GenericConfigurator,buildInterpreter,()V,8,8,100.0%,"protected void buildInterpreter() {
+    RuleStore rs = new SimpleRuleStore(context);
+    addInstanceRules(rs);
+    this.interpreter = new Interpreter(context, rs, initialElementPath());
+    InterpretationContext interpretationContext = interpreter.getInterpretationContext();
+    interpretationContext.setContext(context);
+    addImplicitRules(interpreter);
+    addDefaultNestedComponentRegistryRules(interpretationContext.getDefaultNestedComponentRegistry());
+  }",114-122,0.9755368,0.9701168,0.9701168
+160,,,0,0,0,ch.qos.logback.core.subst.NodeToStringTransformer,compileNode,(Lch/qos/logback/core/subst/Node;Ljava/lang/StringBuilder;)V,8,8,100.0%,"private void compileNode(Node inputNode, StringBuilder stringBuilder) {
+    Node n = inputNode;
+    while (n != null) {
+      switch (n.type) {
+        case LITERAL:
+          handleLiteral(n, stringBuilder);
+          break;
+        case VARIABLE:
+          handleVariable(n, stringBuilder);
+          break;
+      }
+      n = n.next;
+    }
+  }",56-69,0.9004432,0.9948202,0.9948202
+161,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getMDCPropertyMap,()Ljava/util/Map;,7,8,87.5%,"public Map<String, String> getMDCPropertyMap() {
+    // populate mdcPropertyMap if null
+    if (mdcPropertyMap == null) {
+      MDCAdapter mdc = MDC.getMDCAdapter();
+      if (mdc instanceof LogbackMDCAdapter)
+        mdcPropertyMap = ((LogbackMDCAdapter) mdc).getPropertyMap();
+      else
+        mdcPropertyMap = mdc.getCopyOfContextMap();
+    }
+    // mdcPropertyMap still null, use CACHED_NULL_MAP
+    if (mdcPropertyMap == null)
+      mdcPropertyMap = CACHED_NULL_MAP;
+
+    return mdcPropertyMap;
+  }",305-319,0.9334062,0.99534506,0.99534506
+162,,,0,0,0,ch.qos.logback.core.joran.JoranConfiguratorBase,addImplicitRules,(Lch/qos/logback/core/joran/spi/Interpreter;)V,7,7,100.0%,"@Override
+  protected void addImplicitRules(Interpreter interpreter) {
+    // The following line adds the capability to parse nested components
+    NestedComplexPropertyIA nestedComplexPropertyIA = new NestedComplexPropertyIA();
+    nestedComplexPropertyIA.setContext(context);
+    interpreter.addImplicitAction(nestedComplexPropertyIA);
+
+    NestedBasicPropertyIA nestedBasicIA = new NestedBasicPropertyIA();
+    nestedBasicIA.setContext(context);
+    interpreter.addImplicitAction(nestedBasicIA);
+  }",89-99,0.94731486,0.99052405,0.99052405
+163,,,0,0,0,ch.qos.logback.classic.Logger,callAppenders,(Lch/qos/logback/classic/spi/ILoggingEvent;)V,6,8,75.0%,"public void callAppenders(ILoggingEvent event) {
+    int writes = 0;
+    for (Logger l = this; l != null; l = l.parent) {
+      writes += l.appendLoopOnAppenders(event);
+      if (!l.additive) {
+        break;
+      }
+    }
+    // No appenders in hierarchy
+    if (writes == 0) {
+      loggerContext.noAppenderDefinedWarning(this);
+    }
+  }",256-268,0.9348607,0.98738784,0.98738784
+164,,,0,0,0,ch.qos.logback.classic.Logger,filterAndLog_0_Or3Plus,(Ljava/lang/String;Lorg/slf4j/Marker;Lch/qos/logback/classic/Level;Ljava/lang/String;[Ljava/lang/Object;Ljava/lang/Throwable;)V,6,9,66.7%,"private void filterAndLog_0_Or3Plus(final String localFQCN,
+      final Marker marker, final Level level, final String msg,
+      final Object[] params, final Throwable t) {
+
+    final FilterReply decision = loggerContext
+        .getTurboFilterChainDecision_0_3OrMore(marker, this, level, msg,
+            params, t);
+
+    if (decision == FilterReply.NEUTRAL) {
+      if (effectiveLevelInt > level.levelInt) {
+        return;
+      }
+    } else if (decision == FilterReply.DENY) {
+      return;
+    }
+
+    buildLoggingEventAndAppend(localFQCN, marker, level, msg, params, t);
+  }",379-396,0.941745,0.98013014,0.98013014
+165,,,0,0,0,ch.qos.logback.classic.pattern.EnsureExceptionHandling,chainHandlesThrowable,(Lch/qos/logback/core/pattern/Converter;)Z,6,6,100.0%,"public boolean chainHandlesThrowable(Converter head) {
+    Converter c = head;
+    while (c != null) {
+      if (c instanceof ThrowableHandlingConverter) {
+        return true;
+      }
+      c = c.getNext();
+    }
+    return false;
+  }",59-68,0.9283246,0.9729246,0.9729246
+166,,,0,0,0,ch.qos.logback.classic.pattern.EnsureExceptionHandling,process,(Lch/qos/logback/core/pattern/Converter;)V,6,7,85.7%,"public void process(Converter<ILoggingEvent> head) {
+    if(head == null) {
+      // this should never happen
+      throw new IllegalArgumentException(""cannot process empty chain"");
+    }
+    if (!chainHandlesThrowable(head)) {
+      Converter<ILoggingEvent> tail = ConverterUtil.findTail(head);
+      Converter<ILoggingEvent> exConverter = new ExtendedThrowableProxyConverter();
+      tail.setNext(exConverter);
+    }
+  }",39-49,0.9640008,0.98472285,0.98472285
+167,,,0,0,0,ch.qos.logback.core.helpers.CyclicBuffer,init,(I)V,6,6,100.0%,"@SuppressWarnings(""unchecked"")
+  private void init(int maxSize) {
+    this.maxSize = maxSize;
+    ea = (E[]) new Object[maxSize];
+    first = 0;
+    last = 0;
+    numElems = 0;
+  }",60-67,0.99007,0.9432138,0.9432138
+168,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,endElement,(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V,6,8,75.0%,"public void endElement(EndEvent endEvent) {
+    setDocumentLocator(endEvent.locator);
+    endElement(endEvent.namespaceURI, endEvent.localName, endEvent.qName);
+  }",180-183,0.983673,0.9543439,0.9543439
+169,,,0,0,0,ch.qos.logback.core.joran.spi.SimpleRuleStore,matchActions,(Lch/qos/logback/core/joran/spi/ElementPath;)Ljava/util/List;,6,9,66.7%,"public List<Action> matchActions(ElementPath elementPath) {
+    List<Action> actionList;
+
+    if ((actionList = fullPathMatch(elementPath)) != null) {
+      return actionList;
+    } else if ((actionList = suffixMatch(elementPath)) != null) {
+      return actionList;
+    } else if ((actionList = prefixMatch(elementPath)) != null) {
+      return actionList;
+    } else if ((actionList = middleMatch(elementPath)) != null) {
+      return actionList;
+    } else {
+      return null;
+    }
+  }",84-98,0.78635144,0.9447986,0.9447986
+170,,,0,0,0,ch.qos.logback.core.joran.util.StringToObjectConverter,convertArg,(Lch/qos/logback/core/spi/ContextAware;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;,6,25,24.0%,"@SuppressWarnings(""unchecked"")
+  public static Object convertArg(ContextAware ca, String val, Class<?> type) {
+    if (val == null) {
+      return null;
+    }
+    String v = val.trim();
+    if (String.class.isAssignableFrom(type)) {
+      return v;
+    } else if (Integer.TYPE.isAssignableFrom(type)) {
+      return new Integer(v);
+    } else if (Long.TYPE.isAssignableFrom(type)) {
+      return new Long(v);
+    } else if (Float.TYPE.isAssignableFrom(type)) {
+      return new Float(v);
+    } else if (Double.TYPE.isAssignableFrom(type)) {
+      return new Double(v);
+    } else if (Boolean.TYPE.isAssignableFrom(type)) {
+      if (""true"".equalsIgnoreCase(v)) {
+        return Boolean.TRUE;
+      } else if (""false"".equalsIgnoreCase(v)) {
+        return Boolean.FALSE;
+      }
+    } else if (type.isEnum()) {
+      return convertToEnum(ca, v, (Class<? extends Enum>) type);
+    } else if (StringToObjectConverter.followsTheValueOfConvention(type)) {
+      return convertByValueOfMethod(ca, type, v);
+    } else if (isOfTypeCharset(type)) {
+      return convertToCharset(ca, val);
+    }
+
+    return null;
+  }",52-83,0.90215325,0.99729437,0.99729437
+171,,,0,0,0,ch.qos.logback.core.pattern.ConverterUtil,findTail,(Lch/qos/logback/core/pattern/Converter;)Lch/qos/logback/core/pattern/Converter;,6,8,75.0%,"public static <E> Converter<E> findTail(Converter<E> head) {
+    Converter<E> p = head;
+    while (p != null) {
+      Converter<E> next = p.getNext();
+      if (next == null) {
+        break;
+      } else {
+        p = next;
+      }
+    }
+    return p;
+  }",44-55,0.80425876,0.9306929,0.9306929
+172,,,0,0,0,ch.qos.logback.core.pattern.ConverterUtil,setContextForConverters,(Lch/qos/logback/core/Context;Lch/qos/logback/core/pattern/Converter;)V,6,6,100.0%,"public static <E> void setContextForConverters(Context context, Converter<E> head) {
+    Converter<E> c = head;
+    while (c != null) {
+      if (c instanceof ContextAware) {
+        ((ContextAware) c).setContext(context);
+      }
+      c = c.getNext();
+    }
+  }",57-65,0.9732404,0.9689584,0.9689584
+173,,,0,0,0,ch.qos.logback.core.spi.AppenderAttachableImpl,appendLoopOnAppenders,(Ljava/lang/Object;)I,6,6,100.0%,"public int appendLoopOnAppenders(E e) {
+    int size = 0;
+      for (Appender<E> appender : appenderList) {
+        appender.doAppend(e);
+        size++;
+      }
+    return size;
+  }",45-52,0.967192,0.97522056,0.97522056
+174,,,0,0,0,ch.qos.logback.core.util.OptionHelper,instantiateByClassNameAndParameter,(Ljava/lang/String;Ljava/lang/Class;Ljava/lang/ClassLoader;Ljava/lang/Class;Ljava/lang/Object;)Ljava/lang/Object;,6,14,42.9%,"public static Object instantiateByClassNameAndParameter(String className,
+                                                          Class<?> superClass, Context context, Class<?> type, Object param) throws IncompatibleClassException,
+          DynamicClassLoadingException {
+    ClassLoader classLoader = Loader.getClassLoaderOfObject(context);
+    return instantiateByClassNameAndParameter(className, superClass, classLoader, type, param);
+  }",38-43,-0.85091424,-0.826729,-0.826729
+175,,,0,0,0,ch.qos.logback.classic.Level,toLevel,(Ljava/lang/String;Lch/qos/logback/classic/Level;)Lch/qos/logback/classic/Level;,5,17,29.4%,"public static Level toLevel(String sArg) {
+    return toLevel(sArg, Level.DEBUG);
+  }",148-150,0.995129,0.9179494,0.9179494
+176,,,0,0,0,ch.qos.logback.classic.joran.action.RootLoggerAction,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,5,8,62.5%,"public void end(InterpretationContext ec, String name) {
+    if (inError) {
+      return;
+    }
+    Object o = ec.peekObject();
+    if (o != root) {
+      addWarn(""The object on the top the of the stack is not the root logger"");
+      addWarn(""It is: "" + o);
+    } else {
+      ec.popObject();
+    }
+  }",46-57,0.96971065,0.9755659,0.9755659
+177,,,0,0,0,ch.qos.logback.classic.spi.PlatformInfo,hasJMXObjectName,()Z,5,7,71.4%,"public static boolean hasJMXObjectName() {
+    if (hasJMXObjectName == UNINITIALIZED) {
+      try {
+        Class.forName(""javax.management.ObjectName"");
+        hasJMXObjectName = 1;
+      } catch (Throwable e) {
+        hasJMXObjectName = 0;
+      }
+    }
+    return (hasJMXObjectName == 1);
+  }",27-37,0.9034748,0.9938888,0.9938888
+178,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,computeRawAggregationType,(Ljava/lang/reflect/Method;)Lch/qos/logback/core/util/AggregationType;,5,6,83.3%,"private AggregationType computeRawAggregationType(Method method) {
+    Class<?> parameterClass = getParameterClassForMethod(method);
+    if (parameterClass == null) {
+      return AggregationType.NOT_FOUND;
+    }
+    if (StringToObjectConverter.canBeBuiltFromSimpleString(parameterClass)) {
+      return AggregationType.AS_BASIC_PROPERTY;
+    } else {
+      return AggregationType.AS_COMPLEX_PROPERTY;
+    }
+  }",228-238,0.96603227,0.9859111,0.9859111
+179,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,findSetterMethod,(Ljava/lang/String;)Ljava/lang/reflect/Method;,5,5,100.0%,"private Method findSetterMethod(String name) {
+    String dName = Introspector.decapitalize(name);
+    PropertyDescriptor propertyDescriptor = getPropertyDescriptor(dName);
+    if (propertyDescriptor != null) {
+      return propertyDescriptor.getWriteMethod();
+    } else {
+      return null;
+    }
+  }",206-214,0.9546776,0.9894889,0.9894889
+180,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,introspect,()V,5,9,55.6%,"protected void introspect() {
+    try {
+      BeanInfo bi = Introspector.getBeanInfo(obj.getClass());
+      propertyDescriptors = bi.getPropertyDescriptors();
+      methodDescriptors = bi.getMethodDescriptors();
+    } catch (IntrospectionException ex) {
+      addError(""Failed to introspect "" + obj + "": "" + ex.getMessage());
+      propertyDescriptors = new PropertyDescriptor[0];
+      methodDescriptors = new MethodDescriptor[0];
+    }
+  }",77-87,0.95142454,0.9918889,0.9918889
+181,,,0,0,0,ch.qos.logback.core.pattern.parser.Compiler,addToList,(Lch/qos/logback/core/pattern/Converter;)V,5,5,100.0%,"private void addToList(Converter<E> c) {
+    if (head == null) {
+      head = tail = c;
+    } else {
+      tail.setNext(c);
+      tail = c;
+    }
+  }",84-91,0.96695334,0.97032416,0.97032416
+182,,,0,0,0,ch.qos.logback.core.subst.NodeToStringTransformer,substituteVariable,(Ljava/lang/String;Lch/qos/logback/core/spi/PropertyContainer;Lch/qos/logback/core/spi/PropertyContainer;)Ljava/lang/String;,5,5,100.0%,"public static String substituteVariable(String input, PropertyContainer pc0, PropertyContainer pc1) throws ScanException {
+    Tokenizer tokenizer = new Tokenizer(input);
+    Parser parser = new Parser(tokenizer.tokenize());
+    Node node = parser.parse();
+    NodeToStringTransformer nodeToStringTransformer = new NodeToStringTransformer(node, pc0, pc1);
+    return nodeToStringTransformer.transform();
+  }",42-48,0.8880583,0.9747889,0.9747889
+183,,,0,0,0,ch.qos.logback.core.subst.Parser,V,()Lch/qos/logback/core/subst/Node;,5,8,62.5%,"private Node V() throws ScanException {
+    Node e = E();
+    Node variable = new Node(Node.Type.VARIABLE, e);
+    Token t = peekAtCurentToken();
+    if (isDefaultToken(t)) {
+      advanceTokenPointer();
+      Node def = E();
+      variable.defaultPart = def;
+    }
+    return variable;
+  }",106-116,0.98813504,0.9482439,0.9482439
+184,,,0,0,0,ch.qos.logback.classic.Logger,buildLoggingEventAndAppend,(Ljava/lang/String;Lorg/slf4j/Marker;Lch/qos/logback/classic/Level;Ljava/lang/String;[Ljava/lang/Object;Ljava/lang/Throwable;)V,4,4,100.0%,"private void buildLoggingEventAndAppend(final String localFQCN,
+      final Marker marker, final Level level, final String msg,
+      final Object[] params, final Throwable t) {
+    LoggingEvent le = new LoggingEvent(localFQCN, this, level, msg, t, params);
+    le.setMarker(marker);
+    callAppenders(le);
+  }",436-442,0.9809992,0.9662023,0.9662023
+185,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,prepareForDeferredProcessing,()V,4,4,100.0%,"public void prepareForDeferredProcessing() {
+    this.getFormattedMessage();
+    this.getThreadName();
+    // fixes http://jira.qos.ch/browse/LBCLASSIC-104
+    this.getMDCPropertyMap();
+  }",204-209,0.99118745,0.95211357,0.95211357
+186,,,0,0,0,ch.qos.logback.core.joran.event.SaxEventRecorder,buildSaxParser,()Ljavax/xml/parsers/SAXParser;,4,8,50.0%,"private SAXParser buildSaxParser() throws JoranException {
+    try {
+      SAXParserFactory spf = SAXParserFactory.newInstance();
+      spf.setValidating(false);
+      spf.setNamespaceAware(true);
+      return spf.newSAXParser();
+    } catch (Exception pce) {
+      String errMsg = ""Parser configuration error occurred"";
+      addError(errMsg, pce);
+      throw new JoranException(errMsg, pce);
+    }
+  }",79-90,0.9545985,0.98962975,0.98962975
+187,,,0,0,0,ch.qos.logback.core.joran.spi.ConfigurationWatchList,setMainURL,(Ljava/net/URL;)V,4,4,100.0%,"public void setMainURL(URL mainURL) {
+    // main url can be null
+    this.mainURL = mainURL;
+    if (mainURL != null)
+      addAsFileToWatch(mainURL);
+  }",44-49,0.97691774,0.97477245,0.97477245
+188,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,getApplicableActionList,(Lch/qos/logback/core/joran/spi/ElementPath;Lorg/xml/sax/Attributes;)Ljava/util/List;,4,4,100.0%,"List<Action> getApplicableActionList(ElementPath elementPath, Attributes attributes) {
+    List<Action> applicableActionList = ruleStore.matchActions(elementPath);
+
+    // logger.debug(""set of applicable patterns: "" + applicableActionList);
+    if (applicableActionList == null) {
+      applicableActionList = lookupImplicitAction(elementPath, attributes,
+          interpretationContext);
+    }
+
+    return applicableActionList;
+  }",251-261,0.9802162,0.9632979,0.9632979
+189,,,0,0,0,ch.qos.logback.core.joran.spi.NoAutoStartUtil,notMarkedWithNoAutoStart,(Ljava/lang/Object;)Z,4,5,80.0%,"static public boolean notMarkedWithNoAutoStart(Object o) {
+    if (o == null) {
+      return false;
+    }
+    Class<?> clazz = o.getClass();
+    NoAutoStart a = clazz.getAnnotation(NoAutoStart.class);
+    return a == null;
+  }",25-32,0.97911984,0.9598545,0.9598545
+190,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,getParameterClassForMethod,(Ljava/lang/reflect/Method;)Ljava/lang/Class;,4,6,66.7%,"private Class<?> getParameterClassForMethod(Method method) {
+    if (method == null) {
+      return null;
+    }
+    Class<?>[] classArray = method.getParameterTypes();
+    if (classArray.length != 1) {
+      return null;
+    } else {
+      return classArray[0];
+    }
+  }",216-226,0.9251225,0.9805725,0.9805725
+191,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,isTooSoonForRemovalIteration,(J)Z,4,4,100.0%,"private boolean isTooSoonForRemovalIteration(long now) {
+    if (lastCheck + WAIT_BETWEEN_SUCCESSIVE_REMOVAL_ITERATIONS > now) {
+      return true;
+    }
+    lastCheck = now;
+    return false;
+  }",204-210,0.989151,0.9415325,0.9415325
+192,,,0,0,0,ch.qos.logback.core.spi.ContextAwareBase,setContext,(Lch/qos/logback/core/Context;)V,4,5,80.0%,"public void setContext(Context context) {
+    if (this.context == null) {
+      this.context = context;
+    } else if (this.context != context) {
+      throw new IllegalStateException(""Context has been already set"");
+    }
+  }",41-47,0.9320822,0.9613725,0.9613725
+193,,,0,0,0,ch.qos.logback.core.status.OnPrintStreamStatusListenerBase,print,(Lch/qos/logback/core/status/Status;)V,4,4,100.0%,"private void print(Status status) {
+    StringBuilder sb = new StringBuilder();
+    StatusPrinter.buildStr(sb, """", status);
+    getPrintStream().print(sb);
+  }",41-45,0.99357903,0.912997,0.912997
+194,,,0,0,0,ch.qos.logback.core.subst.Parser,Eopt,()Lch/qos/logback/core/subst/Node;,4,4,100.0%,"private Node Eopt() throws ScanException {
+    Token next = peekAtCurentToken();
+    if (next == null) {
+      return null;
+    } else {
+      return E();
+    }
+  }",62-69,0.98260874,0.950681,0.950681
+195,,,0,0,0,ch.qos.logback.core.util.ContextUtil,addHostNameAsProperty,()V,4,10,40.0%,"public void addHostNameAsProperty() {
+    try {
+      String localhostName = getLocalHostName();
+      context.putProperty(CoreConstants.HOSTNAME_KEY, localhostName);
+    } catch (UnknownHostException e) {
+      addError(""Failed to get local hostname"", e);
+    } catch (SocketException e) {
+      addError(""Failed to get local hostname"", e);
+    } catch (SecurityException e) {
+      addError(""Failed to get local hostname"", e);
+    }
+  }",72-83,0.9116999,0.9932883,0.9932883
+196,,,0,0,0,ch.qos.logback.classic.Logger,appendLoopOnAppenders,(Lch/qos/logback/classic/spi/ILoggingEvent;)I,3,3,100.0%,"private int appendLoopOnAppenders(ILoggingEvent event) {
+    if (aai != null) {
+      return aai.appendLoopOnAppenders(event);
+    } else {
+      return 0;
+    }
+  }",270-276,0.98196507,0.9549002,0.9549002
+197,,,0,0,0,ch.qos.logback.classic.LoggerContext,putProperty,(Ljava/lang/String;Ljava/lang/String;)V,3,3,100.0%,"@Override
+  public void putProperty(String key, String val) {
+    super.putProperty(key, val);
+    updateLoggerContextVO();
+  }",89-93,0.9702704,0.9368533,0.9368533
+198,,,0,0,0,ch.qos.logback.classic.joran.action.ConfigurationAction,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,3,3,100.0%,"public void end(InterpretationContext ec, String name) {
+    addInfo(""End of configuration."");
+    ec.popObject();
+  }",93-96,0.99345887,0.90396255,0.90396255
+199,,,0,0,0,ch.qos.logback.classic.net.SMTPAppender,makeNewToPatternLayout,(Ljava/lang/String;)Lch/qos/logback/classic/PatternLayout;,3,3,100.0%,"protected PatternLayout makeNewToPatternLayout(String toPattern) {
+    PatternLayout pl = new PatternLayout();
+    pl.setPattern(toPattern+""%nopex"");
+    return pl;
+  }",122-126,0.99146855,0.9348377,0.9348377
+200,,,0,0,0,ch.qos.logback.classic.pattern.NamedConverter,convert,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,3,4,75.0%,"public String convert(ILoggingEvent event) {
+    String fqn = getFullyQualifiedName(event);
+
+    if (abbreviator == null) {
+      return fqn;
+    } else {
+      return abbreviator.abbreviate(fqn);
+    }
+  }",47-55,0.97267854,0.97856057,0.97856057
+201,,,0,0,0,ch.qos.logback.classic.pattern.NamedConverter,start,()V,3,10,30.0%,"public void start() {
+    String optStr = getFirstOption();
+    if (optStr != null) {
+      try {
+        int targetLen = Integer.parseInt(optStr);
+        if (targetLen == 0) {
+          abbreviator = new ClassNameOnlyAbbreviator();
+        } else if (targetLen > 0) {
+          abbreviator = new TargetLengthBasedClassNameAbbreviator(targetLen);
+        }
+      } catch (NumberFormatException nfe) {
+        // FIXME: better error reporting
+      }
+    }
+  }",31-45,0.92475426,0.9963131,0.9963131
+202,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,setMarker,(Lorg/slf4j/Marker;)V,3,4,75.0%,"public void setMarker(Marker marker) {
+    if (this.marker != null) {
+      throw new IllegalStateException(
+              ""The marker has been already set for this event."");
+    }
+    this.marker = marker;
+  }",277-283,0.9466368,0.95023173,0.95023173
+203,,,0,0,0,ch.qos.logback.classic.util.EnvUtil,isGroovyAvailable,()Z,3,5,60.0%,"static public boolean isGroovyAvailable() {
+    ClassLoader classLoader = Loader.getClassLoaderOfClass(EnvUtil.class);
+    try {
+      Class bindingClass = classLoader.loadClass(""groovy.lang.Binding"");
+      return (bindingClass != null);
+    } catch (ClassNotFoundException e) {
+      return false;
+    }
+  }",24-32,0.98948693,0.95285875,0.95285875
+204,,,0,0,0,ch.qos.logback.core.boolex.EventEvaluatorBase,setName,(Ljava/lang/String;)V,3,4,75.0%,"public void setName(String name) {
+    if (this.name != null) {
+      throw new IllegalStateException(""name has been already set"");
+    }
+    this.name = name;
+  }",28-33,0.9620388,0.91683185,0.91683185
+205,,,0,0,0,ch.qos.logback.core.joran.event.SaxEventRecorder,recordEvents,(Lorg/xml/sax/InputSource;)Ljava/util/List;,3,11,27.3%,"final public void recordEvents(InputStream inputStream) throws JoranException {
+    recordEvents(new InputSource(inputStream));
+  }",53-55,0.99032414,0.9173053,0.9173053
+206,,,0,0,0,ch.qos.logback.core.joran.spi.InterpretationContext,subst,(Ljava/lang/String;)Ljava/lang/String;,3,3,100.0%,"public String subst(String value) {
+    if (value == null) {
+      return null;
+    }
+    return OptionHelper.substVars(value, this, context);
+  }",155-160,0.9937354,0.90819335,0.90819335
+207,,overload of an earlier row - skipped,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,endElement,(Lch/qos/logback/core/joran/event/EndEvent;)V,3,3,100.0%,"public void endElement(EndEvent endEvent) {
+    setDocumentLocator(endEvent.locator);
+    endElement(endEvent.namespaceURI, endEvent.localName, endEvent.qName);
+  }",180-183,0.983673,0.9543439,0.9543439
+208,,overload of an earlier row - skipped,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,startElement,(Lch/qos/logback/core/joran/event/StartEvent;)V,3,3,100.0%,"public void startElement(StartEvent se) {
+    setDocumentLocator(se.getLocator());
+    startElement(se.namespaceURI, se.localName, se.qName, se.attributes);
+  }",127-130,0.9944382,0.94086486,0.94086486
+209,,,0,0,0,ch.qos.logback.core.joran.util.ConfigurationWatchListUtil,wasConfigurationWatchListReset,(Lch/qos/logback/core/Context;)Z,3,4,75.0%,"public static boolean wasConfigurationWatchListReset(Context context) {
+    Object o = context.getObject(CoreConstants.CONFIGURATION_WATCH_LIST_RESET);
+    if (o == null)
+      return false;
+    else {
+      return ((Boolean) o).booleanValue();
+    }
+  }",68-75,0.9706458,0.96854556,0.96854556
+210,,,0,0,0,ch.qos.logback.core.pattern.Converter,setNext,(Lch/qos/logback/core/pattern/Converter;)V,3,4,75.0%,"public final void setNext(Converter<E> next) {
+    if (this.next != null) {
+      throw  new IllegalStateException(""Next converter has been already set"");
+    }
+    this.next = next;
+  }",45-50,0.9869799,0.9298725,0.9298725
+211,,,0,0,0,ch.qos.logback.core.pattern.FormattingConverter,setFormattingInfo,(Lch/qos/logback/core/pattern/FormatInfo;)V,3,4,75.0%,"final public void setFormattingInfo(FormatInfo formattingInfo) {
+    if (this.formattingInfo != null) {
+      throw new IllegalStateException(""FormattingInfo has been already set"");
+    }
+    this.formattingInfo = formattingInfo;
+  }",28-33,0.96581376,0.96618944,0.96618944
+212,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,isEntryStale,(Lch/qos/logback/core/spi/AbstractComponentTracker$Entry;J)Z,3,4,75.0%,"private boolean isEntryStale(Entry<C> entry, long now) {
+    // stopped or improperly started appenders are considered stale
+    // see also http://jira.qos.ch/browse/LBCLASSIC-316
+    C c = entry.component;
+    if (isComponentStale(c))
+      return true;
+
+    return ((entry.timestamp + timeout) < now);
+  }",212-220,0.98817,0.933613,0.933613
+213,,,0,0,0,ch.qos.logback.core.status.OnPrintStreamStatusListenerBase,addStatusEvent,(Lch/qos/logback/core/status/Status;)V,3,4,75.0%,"public void addStatusEvent(Status status) {
+    if (!isStarted)
+      return;
+    print(status);
+  }",47-51,0.99470794,0.91430545,0.91430545
+214,,,0,0,0,ch.qos.logback.core.subst.NodeToStringTransformer,lookupKey,(Ljava/lang/String;)Ljava/lang/String;,3,14,21.4%,"private String lookupKey(String key) {
+    String value = propertyContainer0.getProperty(key);
+    if (value != null)
+      return value;
+
+    if (propertyContainer1 != null) {
+      value = propertyContainer1.getProperty(key);
+      if (value != null)
+        return value;
+    }
+
+    value = OptionHelper.getSystemProperty(key, null);
+    if (value != null)
+      return value;
+
+    value = OptionHelper.getEnv(key);
+    if (value != null) {
+      return value;
+    }
+
+    return null;
+  }",94-115,-0.031327195,0.20996773,0.20996773
+215,,,0,0,0,ch.qos.logback.core.subst.Parser,expectCurlyRight,(Lch/qos/logback/core/subst/Token;)V,3,4,75.0%,"void expectCurlyRight(Token t) throws ScanException {
+    expectNotNull(t, ""}"");
+    if (t.type != Token.Type.CURLY_RIGHT) {
+      throw new ScanException(""Expecting }"");
+    }
+  }",147-152,0.99403214,0.8920235,0.8920235
+216,,,0,0,0,ch.qos.logback.core.util.Loader,getClassLoaderOfClass,(Ljava/lang/Class;)Ljava/lang/ClassLoader;,3,4,75.0%,"public static ClassLoader getClassLoaderOfClass(final Class<?> clazz) {
+    ClassLoader cl = clazz.getClassLoader();
+    if (cl == null) {
+      return ClassLoader.getSystemClassLoader();
+    } else {
+      return cl;
+    }
+  }",166-173,0.93600726,0.947052,0.947052
+217,,,0,0,0,ch.qos.logback.core.util.OptionHelper,substVars,(Ljava/lang/String;Lch/qos/logback/core/spi/PropertyContainer;Lch/qos/logback/core/spi/PropertyContainer;)Ljava/lang/String;,3,6,50.0%,"public static String substVars(String val, PropertyContainer pc1) {
+    return substVars(val, pc1, null);
+  }",108-110,0.9883865,0.9499508,0.9499508
+218,,,0,0,0,ch.qos.logback.classic.Logger,debug,(Ljava/lang/String;)V,2,2,100.0%,"public void debug(String msg) {
+    filterAndLog_0_Or3Plus(FQCN, null, Level.DEBUG, msg, null, null);
+  }",501-503,0.9931663,0.9017043,0.9017043
+219,,,0,0,0,ch.qos.logback.classic.Logger,error,(Ljava/lang/String;)V,2,2,100.0%,"public void error(String msg) {
+    filterAndLog_0_Or3Plus(FQCN, null, Level.ERROR, msg, null, null);
+  }",541-543,0.99317956,0.90192723,0.90192723
+220,,,0,0,0,ch.qos.logback.classic.LoggerContext,updateLoggerContextVO,()V,2,2,100.0%,"private void updateLoggerContextVO() {
+    loggerContextRemoteView = new LoggerContextVO(this);
+  }",85-87,0.9937821,0.91741633,0.91741633
+221,,,0,0,0,ch.qos.logback.classic.PatternLayout,doLayout,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,2,3,66.7%,"public String doLayout(ILoggingEvent event) {
+    if (!isStarted()) {
+      return CoreConstants.EMPTY_STRING;
+    }
+    return writeLoopOnConverters(event);
+  }",164-169,0.99678254,0.9211671,0.9211671
+222,,,0,0,0,ch.qos.logback.classic.joran.JoranConfigurator,addDefaultNestedComponentRegistryRules,(Lch/qos/logback/core/joran/spi/DefaultNestedComponentRegistry;)V,2,2,100.0%,"@Override
+  protected void addDefaultNestedComponentRegistryRules(
+      DefaultNestedComponentRegistry registry) {
+    DefaultNestedComponentRules.addDefaultNestedComponentRegistryRules(registry);
+  }",90-94,0.9789788,0.9664326,0.9664326
+223,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getFormattedMessage,()Ljava/lang/String;,2,7,28.6%,"public String getFormattedMessage() {
+    if (formattedMessage != null) {
+      return formattedMessage;
+    }
+    if (argumentArray != null) {
+      formattedMessage = MessageFormatter.arrayFormat(message, argumentArray)
+              .getMessage();
+    } else {
+      formattedMessage = message;
+    }
+
+    return formattedMessage;
+  }",291-303,0.81359965,0.89719397,0.89719397
+224,,,0,0,0,ch.qos.logback.core.AppenderBase,setName,(Ljava/lang/String;)V,2,2,100.0%,"public void setName(String name) {
+    this.name = name;
+  }",101-103,0.9741541,0.9219513,0.9219513
+225,,,0,0,0,ch.qos.logback.core.LayoutBase,setContext,(Lch/qos/logback/core/Context;)V,2,2,100.0%,"public void setContext(Context context) {
+    this.context = context;
+  }",27-29,0.98637486,0.93675303,0.93675303
+226,,,0,0,0,ch.qos.logback.core.LayoutBase,start,()V,2,2,100.0%,"public void start() {
+    started = true;
+  }",35-37,0.98783994,0.90558773,0.90558773
+227,,,0,0,0,ch.qos.logback.core.boolex.EventEvaluatorBase,start,()V,2,2,100.0%,"public void start() {
+    started = true;
+  }",39-41,0.98783994,0.90558773,0.90558773
+228,,,0,0,0,ch.qos.logback.core.helpers.CyclicBuffer,clear,()V,2,2,100.0%,"public void clear() {
+    init(this.maxSize);
+  }",72-74,0.9938109,0.91726196,0.91726196
+229,,,0,0,0,ch.qos.logback.core.joran.GenericConfigurator,informContextOfURLUsedForConfiguration,(Lch/qos/logback/core/Context;Ljava/net/URL;)V,2,2,100.0%,"public static void informContextOfURLUsedForConfiguration(Context context, URL url) {
+    ConfigurationWatchListUtil.setMainWatchURL(context, url);
+  }",94-96,0.9928059,0.9171967,0.9171967
+230,,,0,0,0,ch.qos.logback.core.joran.GenericConfigurator,registerSafeConfiguration,()V,2,2,100.0%,"public void registerSafeConfiguration() {
+    context.putObject(SAFE_JORAN_CONFIGURATION, interpreter.getEventPlayer().getCopyOfPlayerEventList());
+  }",159-161,0.99432826,0.9164176,0.9164176
+231,,,0,0,0,ch.qos.logback.core.joran.action.IADataForComplexProperty,setNestedComplexProperty,(Ljava/lang/Object;)V,2,2,100.0%,"public void setNestedComplexProperty(Object nestedComplexProperty) {
+    this.nestedComplexProperty = nestedComplexProperty;
+  }",49-51,0.9638634,0.984777,0.984777
+232,,,0,0,0,ch.qos.logback.core.joran.event.BodyEvent,getText,()Ljava/lang/String;,2,3,66.7%,"public String getText() {
+    if(text != null) {
+      return text.trim();
+    } 
+    return text;
+  }",33-38,0.97327894,0.9023558,0.9023558
+233,,,0,0,0,ch.qos.logback.core.joran.event.SaxEventRecorder,setDocumentLocator,(Lorg/xml/sax/Locator;)V,2,2,100.0%,"public void setDocumentLocator(Locator l) {
+    locator = l;
+  }",99-101,0.99187654,0.9313873,0.9313873
+234,,,0,0,0,ch.qos.logback.core.joran.spi.InterpretationContext,fireInPlay,(Lch/qos/logback/core/joran/event/SaxEvent;)V,2,4,50.0%,"void fireInPlay(SaxEvent event) {
+    for (InPlayListener ipl : listenerList) {
+      ipl.inPlay(event);
+    }
+  }",181-185,0.99359584,0.90382105,0.90382105
+235,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,setDocumentLocator,(Lorg/xml/sax/Locator;)V,2,2,100.0%,"public void setDocumentLocator(Locator l) {
+    locator = l;
+  }",207-209,0.99187654,0.9313873,0.9313873
+236,,,0,0,0,ch.qos.logback.core.joran.util.ConfigurationWatchListUtil,setConfigurationWatchListResetFlag,(Lch/qos/logback/core/Context;Z)V,2,2,100.0%,"public static void setConfigurationWatchListResetFlag(Context context, boolean val) {
+    context.putObject(CoreConstants.CONFIGURATION_WATCH_LIST_RESET, new Boolean(val));
+  }",77-79,0.9946895,0.92869735,0.92869735
+237,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,findAdderMethod,(Ljava/lang/String;)Ljava/lang/reflect/Method;,2,2,100.0%,"private Method findAdderMethod(String name) {
+    name = capitalizeFirstLetter(name);
+    return getMethod(""add"" + name);
+  }",201-204,0.9951816,0.90701383,0.90701383
+238,,,0,0,0,ch.qos.logback.core.joran.util.StringToObjectConverter,followsTheValueOfConvention,(Ljava/lang/Class;)Z,2,8,25.0%,"static private boolean followsTheValueOfConvention(Class<?> parameterClass) {
+    try {
+      Method valueOfMethod = parameterClass.getMethod(CoreConstants.VALUE_OF,
+          STING_CLASS_PARAMETER);
+      int mod = valueOfMethod.getModifiers();
+      if (Modifier.isStatic(mod)) {
+        return true;
+      }
+    } catch (SecurityException e) {
+      // nop
+    } catch (NoSuchMethodException e) {
+      // nop
+    }
+    return false;
+  }",98-112,0.9467439,0.99112403,0.99112403
+239,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setCyclicBufferTracker,(Lch/qos/logback/core/spi/CyclicBufferTracker;)V,2,2,100.0%,"public void setCyclicBufferTracker(CyclicBufferTracker<E> cbTracker) {
+    this.cbTracker = cbTracker;
+  }",522-524,0.9836744,0.96530485,0.96530485
+240,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setFrom,(Ljava/lang/String;)V,2,2,100.0%,"public void setFrom(String from) {
+    this.from = from;
+  }",421-423,0.98417884,0.9313714,0.9313714
+241,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setLayout,(Lch/qos/logback/core/Layout;)V,2,2,100.0%,"public void setLayout(Layout<E> layout) {
+    this.layout = layout;
+  }",674-676,0.9906282,0.935988,0.935988
+242,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setSMTPHost,(Ljava/lang/String;)V,2,2,100.0%,"public void setSMTPHost(String smtpHost) {
+    setSmtpHost(smtpHost);
+  }",438-440,0.9901078,0.9472968,0.9472968
+243,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setSMTPPort,(I)V,2,2,100.0%,"public void setSMTPPort(int port) {
+    setSmtpPort(port);
+  }",469-471,0.994245,0.9253277,0.9253277
+244,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setSmtpHost,(Ljava/lang/String;)V,2,2,100.0%,"public void setSmtpHost(String smtpHost) {
+    this.smtpHost = smtpHost;
+  }",446-448,0.9859228,0.9641891,0.9641891
+245,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setSmtpPort,(I)V,2,2,100.0%,"public void setSmtpPort(int port) {
+    this.smtpPort = port;
+  }",478-480,0.9957997,0.9230291,0.9230291
+246,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,setSubject,(Ljava/lang/String;)V,2,2,100.0%,"public void setSubject(String subject) {
+    this.subjectStr = subject;
+  }",429-431,0.97971606,0.9287484,0.9287484
+247,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase$SenderRunnable,run,()V,2,2,100.0%,"public void run() {
+      sendBuffer(cyclicBuffer, e);
+    }",688-690,0.9940583,0.8943027,0.8943027
+248,,,0,0,0,ch.qos.logback.core.pattern.DynamicConverter,setContext,(Lch/qos/logback/core/Context;)V,2,2,100.0%,"public void setContext(Context context) {
+    cab.setContext(context);
+  }",77-79,0.99356145,0.93050736,0.93050736
+249,,,0,0,0,ch.qos.logback.core.pattern.DynamicConverter,setOptionList,(Ljava/util/List;)V,2,2,100.0%,"public void setOptionList(List<String> optionList) {
+    this.optionList = optionList;
+  }",55-57,0.9763039,0.9674323,0.9674323
+250,,,0,0,0,ch.qos.logback.core.pattern.DynamicConverter,start,()V,2,2,100.0%,"public void start() {
+    started = true;
+  }",43-45,0.98783994,0.90558773,0.90558773
+251,,,0,0,0,ch.qos.logback.core.pattern.PatternLayoutBase,getPresentationHeader,()Ljava/lang/String;,2,3,66.7%,"@Override
+  public String getPresentationHeader() {
+    if(outputPatternAsHeader)
+      return getPresentationHeaderPrefix()+pattern;
+    else
+      return super.getPresentationHeader();
+  }",154-160,0.9700138,0.96325547,0.96325547
+252,,,0,0,0,ch.qos.logback.core.pattern.PatternLayoutBase,setPattern,(Ljava/lang/String;)V,2,2,100.0%,"public void setPattern(String pattern) {
+    this.pattern = pattern;
+  }",129-131,0.9911778,0.938526,0.938526
+253,,,0,0,0,ch.qos.logback.core.pattern.PatternLayoutBase,setPostCompileProcessor,(Lch/qos/logback/core/pattern/PostCompileProcessor;)V,2,2,100.0%,"public void setPostCompileProcessor(
+      PostCompileProcessor<E> postCompileProcessor) {
+    this.postCompileProcessor = postCompileProcessor;
+  }",100-103,0.95942855,0.98834807,0.98834807
+254,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,removeExcedentComponents,()V,2,2,100.0%,"private void removeExcedentComponents() {
+    genericStaleComponentRemover(liveMap, 0, byExcedent);
+  }",159-161,0.9933138,0.9139972,0.9139972
+255,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,removeStaleComponentsFromLingerersMap,(J)V,2,2,100.0%,"private void removeStaleComponentsFromLingerersMap(long now) {
+    genericStaleComponentRemover(lingerersMap, now, byLingering);
+  }",167-169,0.9934384,0.92016995,0.92016995
+256,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,removeStaleComponentsFromMainMap,(J)V,2,2,100.0%,"private void removeStaleComponentsFromMainMap(long now) {
+    genericStaleComponentRemover(liveMap, now, byTimeout);
+  }",163-165,0.99290186,0.91891617,0.91891617
+257,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker,setMaxComponents,(I)V,2,2,100.0%,"public void setMaxComponents(int maxComponents) {
+    this.maxComponents = maxComponents;
+  }",254-256,0.9770236,0.97348535,0.97348535
+258,,,0,0,0,ch.qos.logback.core.spi.AbstractComponentTracker$Entry,setTimestamp,(J)V,2,2,100.0%,"public void setTimestamp(long timestamp) {
+      this.timestamp = timestamp;
+    }",274-276,0.97946125,0.9180241,0.9180241
+259,,,0,0,0,ch.qos.logback.core.spi.ContextAwareBase,addInfo,(Ljava/lang/String;)V,2,2,100.0%,"public void addInfo(String msg) {
+    addStatus(new InfoStatus(msg, getDeclaredOrigin()));
+  }",83-85,0.99427116,0.9110599,0.9110599
+260,,,0,0,0,ch.qos.logback.core.spi.ContextAwareImpl,addError,(Ljava/lang/String;)V,2,2,100.0%,"public void addError(String msg) {
+    addStatus(new ErrorStatus(msg, getOrigin()));
+  }",94-96,0.9940147,0.9054103,0.9054103
+261,,,0,0,0,ch.qos.logback.core.spi.CyclicBufferTracker,setBufferSize,(I)V,2,2,100.0%,"public void setBufferSize(int bufferSize) {
+    this.bufferSize = bufferSize;
+  }",42-44,0.98187673,0.9638572,0.9638572
+262,,,0,0,0,ch.qos.logback.core.spi.FilterAttachableImpl,getFilterChainDecision,(Ljava/lang/Object;)Lch/qos/logback/core/spi/FilterReply;,2,6,33.3%,"public FilterReply getFilterChainDecision(E event) {
+    for (Filter<E> f : filterList) {
+      final FilterReply r = f.decide(event);
+      if (r == FilterReply.DENY || r == FilterReply.ACCEPT) {
+        return r;
+      }
+    }
+    return FilterReply.NEUTRAL;
+  }",50-58,0.9785274,0.9697557,0.9697557
+263,,,0,0,0,ch.qos.logback.core.subst.Parser,advanceTokenPointer,()V,2,2,100.0%,"void advanceTokenPointer() {
+    pointer++;
+  }",136-138,0.99103177,0.91841274,0.91841274
+264,,,0,0,0,ch.qos.logback.core.subst.Parser,expectNotNull,(Lch/qos/logback/core/subst/Token;Ljava/lang/String;)V,2,3,66.7%,"void expectNotNull(Token t, String expected) {
+    if (t == null) {
+      throw new IllegalArgumentException(""All tokens consumed but was expecting \""""
+              + expected + ""\"""");
+    }
+  }",140-145,0.9923044,0.90303195,0.90303195
+265,,,0,0,0,ch.qos.logback.core.util.ContentTypeUtil,isTextual,(Ljava/lang/String;)Z,2,3,66.7%,"public static boolean isTextual(String contextType) {
+    if (contextType == null) {
+      return false;
+    }
+    return contextType.startsWith(""text"");
+  }",24-29,0.97215086,0.946254,0.946254
+266,,,0,0,0,ch.qos.logback.core.util.ContextUtil,addGroovyPackages,(Ljava/util/List;)V,2,2,100.0%,"public void addGroovyPackages(List<String> frameworkPackages) {
+    //addFrameworkPackage(frameworkPackages, ""groovy.lang"");
+    addFrameworkPackage(frameworkPackages, ""org.codehaus.groovy.runtime"");
+  }",97-100,0.97866803,0.97271395,0.97271395
+267,,,0,0,0,ch.qos.logback.core.util.ContextUtil,getLocalHostName,()Ljava/lang/String;,2,4,50.0%,"public static String getLocalHostName() throws UnknownHostException,
+          SocketException {
+    try {
+      InetAddress localhost = InetAddress.getLocalHost();
+      return localhost.getHostName();
+    } catch (UnknownHostException e) {
+      return getLocalAddressAsString();
+    }
+  }",35-43,0.82825017,0.91611904,0.91611904
+268,,,0,0,0,ch.qos.logback.core.util.Loader,getClassLoaderOfObject,(Ljava/lang/Object;)Ljava/lang/ClassLoader;,2,3,66.7%,"public static ClassLoader getClassLoaderOfObject(Object o) {
+    if (o == null) {
+      throw new NullPointerException(""Argument cannot be null"");
+    }
+    return getClassLoaderOfClass(o.getClass());
+  }",134-139,0.9922244,0.94284505,0.94284505
+269,,,0,0,0,ch.qos.logback.core.util.Loader,loadClass,(Ljava/lang/String;Lch/qos/logback/core/Context;)Ljava/lang/Class;,2,2,100.0%,"public static Class<?> loadClass(String clazz, Context context)
+          throws ClassNotFoundException {
+    ClassLoader cl = getClassLoaderOfObject(context);
+    return cl.loadClass(clazz);
+  }",121-125,0.91197735,0.777458,0.777458
+270,,,0,0,0,ch.qos.logback.core.util.OptionHelper,instantiateByClassName,(Ljava/lang/String;Ljava/lang/Class;Lch/qos/logback/core/Context;)Ljava/lang/Object;,2,2,100.0%,"public static Object instantiateByClassName(String className,
+                                              Class<?> superClass, Context context) throws IncompatibleClassException,
+          DynamicClassLoadingException {
+    ClassLoader classLoader = Loader.getClassLoaderOfObject(context);
+    return instantiateByClassName(className, superClass, classLoader);
+  }",31-36,-0.75783294,-0.7112578,-0.7112578
+271,,overload of an earlier row - skipped,0,0,0,ch.qos.logback.classic.Level,toLevel,(Ljava/lang/String;)Lch/qos/logback/classic/Level;,1,1,100.0%,"public static Level toLevel(String sArg) {
+    return toLevel(sArg, Level.DEBUG);
+  }",148-150,0.995129,0.9179494,0.9179494
+272,,,0,0,0,ch.qos.logback.classic.Level,toString,()Ljava/lang/String;,1,1,100.0%,"public String toString() {
+    return levelStr;
+  }",98-100,0.993929,0.9126005,0.9126005
+273,,,0,0,0,ch.qos.logback.classic.Logger,getLoggerContext,()Lch/qos/logback/classic/LoggerContext;,1,1,100.0%,"public LoggerContext getLoggerContext() {
+    return loggerContext;
+  }",780-782,0.9941376,0.90501,0.90501
+274,,,0,0,0,ch.qos.logback.classic.Logger,getName,()Ljava/lang/String;,1,1,100.0%,"public String getName() {
+    return name;
+  }",122-124,0.9945145,0.9232655,0.9232655
+275,,,0,0,0,ch.qos.logback.classic.Logger,toString,()Ljava/lang/String;,1,1,100.0%,"public String toString() {
+    return ""Logger["" + name + ""]"";
+  }",755-757,0.99372447,0.9033595,0.9033595
+276,,,0,0,0,ch.qos.logback.classic.LoggerContext,getFrameworkPackages,()Ljava/util/List;,1,1,100.0%,"public List<String> getFrameworkPackages() {
+    return frameworkPackages;
+  }",364-366,0.9923983,0.92609894,0.92609894
+277,,,0,0,0,ch.qos.logback.classic.LoggerContext,getLoggerContextRemoteView,()Lch/qos/logback/classic/spi/LoggerContextVO;,1,1,100.0%,"public LoggerContextVO getLoggerContextRemoteView() {
+    return loggerContextRemoteView;
+  }",188-190,0.99529207,0.9074595,0.9074595
+278,,,0,0,0,ch.qos.logback.classic.PatternLayout,getDefaultConverterMap,()Ljava/util/Map;,1,1,100.0%,"public Map<String, String> getDefaultConverterMap() {
+    return defaultConverterMap;
+  }",160-162,0.9886937,0.9507832,0.9507832
+279,,,0,0,0,ch.qos.logback.classic.boolex.OnErrorEvaluator,evaluate,(Lch/qos/logback/classic/spi/ILoggingEvent;)Z,1,1,100.0%,"public boolean evaluate(ILoggingEvent event) throws NullPointerException,
+      EvaluationException {
+    return event.getLevel().levelInt >= Level.ERROR_INT;
+  }",34-37,0.99669445,0.91660064,0.91660064
+280,,,0,0,0,ch.qos.logback.classic.pattern.LoggerConverter,getFullyQualifiedName,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,1,1,100.0%,"protected String getFullyQualifiedName(ILoggingEvent event) {
+    return event.getLoggerName();
+  }",20-22,0.99566126,0.91779166,0.91779166
+281,,,0,0,0,ch.qos.logback.classic.pattern.MessageConverter,convert,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,1,1,100.0%,"public String convert(ILoggingEvent event) {
+    return event.getFormattedMessage();
+  }",25-27,0.9945157,0.91453755,0.91453755
+282,,,0,0,0,ch.qos.logback.classic.pattern.NopThrowableInformationConverter,convert,(Lch/qos/logback/classic/spi/ILoggingEvent;)Ljava/lang/String;,1,1,100.0%,"public String convert(ILoggingEvent event) {
+    return CoreConstants.EMPTY_STRING;
+  }",39-41,0.9942513,0.90961516,0.90961516
+283,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getLevel,()Lch/qos/logback/classic/Level;,1,1,100.0%,"public Level getLevel() {
+    return level;
+  }",147-149,0.9913447,0.90938437,0.90938437
+284,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getLoggerName,()Ljava/lang/String;,1,1,100.0%,"public String getLoggerName() {
+    return loggerName;
+  }",151-153,0.99607086,0.92248905,0.92248905
+285,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getMarker,()Lorg/slf4j/Marker;,1,1,100.0%,"public Marker getMarker() {
+    return marker;
+  }",273-275,0.9918649,0.91015977,0.91015977
+286,,,0,0,0,ch.qos.logback.classic.spi.LoggingEvent,getThrowableProxy,()Lch/qos/logback/classic/spi/IThrowableProxy;,1,1,100.0%,"public IThrowableProxy getThrowableProxy() {
+    return throwableProxy;
+  }",181-183,0.992949,0.9049214,0.9049214
+287,,,0,0,0,ch.qos.logback.core.AppenderBase,getFilterChainDecision,(Ljava/lang/Object;)Lch/qos/logback/core/spi/FilterReply;,1,1,100.0%,"public FilterReply getFilterChainDecision(E event) {
+    return fai.getFilterChainDecision(event);
+  }",133-135,0.99352866,0.9117388,0.9117388
+288,,,0,0,0,ch.qos.logback.core.ContextBase,getBirthTime,()J,1,1,100.0%,"public long getBirthTime() {
+    return birthTime;
+  }",147-149,0.9927721,0.9193265,0.9193265
+289,,,0,0,0,ch.qos.logback.core.ContextBase,getConfigurationLock,()Ljava/lang/Object;,1,1,100.0%,"public Object getConfigurationLock() {
+    return configurationLock;
+  }",151-153,0.9923278,0.90887976,0.90887976
+290,,,0,0,0,ch.qos.logback.core.ContextBase,getCopyOfPropertyMap,()Ljava/util/Map;,1,1,100.0%,"public Map<String, String> getCopyOfPropertyMap() {
+    return new HashMap<String, String>(propertyMap);
+  }",67-69,0.99321866,0.9142716,0.9142716
+291,,,0,0,0,ch.qos.logback.core.ContextBase,getName,()Ljava/lang/String;,1,1,100.0%,"public String getName() {
+    return name;
+  }",97-99,0.9945145,0.9232655,0.9232655
+292,,,0,0,0,ch.qos.logback.core.ContextBase,getStatusManager,()Lch/qos/logback/core/status/StatusManager;,1,1,100.0%,"public StatusManager getStatusManager() {
+    return sm;
+  }",45-47,0.9926454,0.9100492,0.9100492
+293,,,0,0,0,ch.qos.logback.core.LayoutBase,getContentType,()Ljava/lang/String;,1,1,100.0%,"public String getContentType() {
+    return ""text/plain"";
+  }",63-65,0.9954728,0.9307147,0.9307147
+294,,,0,0,0,ch.qos.logback.core.LayoutBase,getContext,()Lch/qos/logback/core/Context;,1,1,100.0%,"public Context getContext() {
+    return this.context;
+  }",31-33,0.993542,0.9246686,0.9246686
+295,,,0,0,0,ch.qos.logback.core.LayoutBase,getFileFooter,()Ljava/lang/String;,1,1,100.0%,"public String getFileFooter() {
+    return fileFooter;
+  }",59-61,0.9945794,0.9309035,0.9309035
+296,,,0,0,0,ch.qos.logback.core.LayoutBase,getFileHeader,()Ljava/lang/String;,1,1,100.0%,"public String getFileHeader() {
+    return fileHeader;
+  }",47-49,0.9957743,0.9163442,0.9163442
+297,,,0,0,0,ch.qos.logback.core.LayoutBase,getPresentationFooter,()Ljava/lang/String;,1,1,100.0%,"public String getPresentationFooter() {
+    return presentationFooter;
+  }",55-57,0.98895127,0.95294154,0.95294154
+298,,,0,0,0,ch.qos.logback.core.LayoutBase,getPresentationHeader,()Ljava/lang/String;,1,1,100.0%,"public String getPresentationHeader() {
+    return presentationHeader;
+  }",51-53,0.9943802,0.92710865,0.92710865
+299,,,0,0,0,ch.qos.logback.core.LayoutBase,isStarted,()Z,1,1,100.0%,"public boolean isStarted() {
+    return started;
+  }",43-45,0.9928251,0.92420256,0.92420256
+300,,,0,0,0,ch.qos.logback.core.helpers.CyclicBuffer,length,()I,1,1,100.0%,"public int length() {
+    return numElems;
+  }",135-137,0.9916564,0.9178967,0.9178967
+301,,,0,0,0,ch.qos.logback.core.joran.GenericConfigurator,initialElementPath,()Lch/qos/logback/core/joran/spi/ElementPath;,1,1,100.0%,"protected ElementPath initialElementPath() {
+    return new ElementPath();
+  }",110-112,0.9894331,0.9051504,0.9051504
+302,,,0,0,0,ch.qos.logback.core.joran.action.AppenderRefAction,end,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;)V,1,1,100.0%,"public void end(InterpretationContext ec, String n) {
+  }",79-80,0.9904155,0.91726243,0.91726243
+303,,,0,0,0,ch.qos.logback.core.joran.action.IADataForComplexProperty,getNestedComplexProperty,()Ljava/lang/Object;,1,1,100.0%,"public Object getNestedComplexProperty() {
+    return nestedComplexProperty;
+  }",41-43,0.99375474,0.91425467,0.91425467
+304,,,0,0,0,ch.qos.logback.core.joran.action.NestedBasicPropertyIA,begin,(Lch/qos/logback/core/joran/spi/InterpretationContext;Ljava/lang/String;Lorg/xml/sax/Attributes;)V,1,1,100.0%,"public void begin(InterpretationContext ec, String localName,
+      Attributes attributes) {
+    // NOP
+  }",80-83,0.9933442,0.9320372,0.9320372
+305,,,0,0,0,ch.qos.logback.core.joran.event.SaxEvent,getLocator,()Lorg/xml/sax/Locator;,1,1,100.0%,"public Locator getLocator() {
+    return locator;
+  }",38-40,0.9936386,0.9135406,0.9135406
+306,,,0,0,0,ch.qos.logback.core.joran.event.SaxEventRecorder,getLocator,()Lorg/xml/sax/Locator;,1,1,100.0%,"public Locator getLocator() {
+    return locator;
+  }",95-97,0.9936386,0.9135406,0.9135406
+307,,,0,0,0,ch.qos.logback.core.joran.event.SaxEventRecorder,startDocument,()V,1,1,100.0%,"public void startDocument() {
+  }",92-93,0.9895002,0.9271743,0.9271743
+308,,,0,0,0,ch.qos.logback.core.joran.spi.ElementPath,getCopyOfPartList,()Ljava/util/List;,1,1,100.0%,"public List<String> getCopyOfPartList() {
+    return new ArrayList<String>(partList);
+  }",78-80,0.99514604,0.9139581,0.9139581
+309,,,0,0,0,ch.qos.logback.core.joran.spi.ElementPath,toString,()Ljava/lang/String;,1,1,100.0%,"@Override
+  public String toString() {
+    return toStableString();
+  }",118-121,0.9960384,0.9239328,0.9239328
+310,,,0,0,0,ch.qos.logback.core.joran.spi.ElementSelector,equalityCheck,(Ljava/lang/String;Ljava/lang/String;)Z,1,1,100.0%,"private boolean equalityCheck(String x, String y) {
+    return x.equalsIgnoreCase(y);
+  }",141-143,0.9945064,0.91031504,0.91031504
+311,,,0,0,0,ch.qos.logback.core.joran.spi.EventPlayer,getCopyOfPlayerEventList,()Ljava/util/List;,1,1,100.0%,"public List<SaxEvent> getCopyOfPlayerEventList() {
+    return new ArrayList<SaxEvent>(eventList);
+  }",39-41,0.9937318,0.9174472,0.9174472
+312,,,0,0,0,ch.qos.logback.core.joran.spi.InterpretationContext,getDefaultNestedComponentRegistry,()Lch/qos/logback/core/joran/spi/DefaultNestedComponentRegistry;,1,1,100.0%,"public DefaultNestedComponentRegistry getDefaultNestedComponentRegistry() {
+    return defaultNestedComponentRegistry;
+  }",60-62,0.9864223,0.9547612,0.9547612
+313,,,0,0,0,ch.qos.logback.core.joran.spi.InterpretationContext,getObjectMap,()Ljava/util/Map;,1,1,100.0%,"public Map<String, Object> getObjectMap() {
+    return objectMap;
+  }",114-116,0.99216884,0.9224509,0.9224509
+314,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,getEventPlayer,()Lch/qos/logback/core/joran/spi/EventPlayer;,1,1,100.0%,"public EventPlayer getEventPlayer() {
+    return eventPlayer;
+  }",104-106,0.99354106,0.9192571,0.9192571
+315,,,0,0,0,ch.qos.logback.core.joran.spi.Interpreter,getInterpretationContext,()Lch/qos/logback/core/joran/spi/InterpretationContext;,1,1,100.0%,"public InterpretationContext getInterpretationContext() {
+    return interpretationContext;
+  }",120-122,0.992666,0.91754043,0.91754043
+316,,,0,0,0,ch.qos.logback.core.joran.util.ConfigurationWatchListUtil,getConfigurationWatchList,(Lch/qos/logback/core/Context;)Lch/qos/logback/core/joran/spi/ConfigurationWatchList;,1,1,100.0%,"public static ConfigurationWatchList getConfigurationWatchList(Context context) {
+    return (ConfigurationWatchList) context.getObject(CoreConstants.CONFIGURATION_WATCH_LIST);
+  }",81-83,0.99388826,0.9262014,0.9262014
+317,,,0,0,0,ch.qos.logback.core.joran.util.PropertySetter,capitalizeFirstLetter,(Ljava/lang/String;)Ljava/lang/String;,1,1,100.0%,"private String capitalizeFirstLetter(String name) {
+    return name.substring(0, 1).toUpperCase() + name.substring(1);
+  }",387-389,0.98534244,0.95890903,0.95890903
+318,,,0,0,0,ch.qos.logback.core.joran.util.StringToObjectConverter,isOfTypeCharset,(Ljava/lang/Class;)Z,1,1,100.0%,"static private boolean isOfTypeCharset(Class<?> type) {
+    return Charset.class.isAssignableFrom(type);
+  }",85-87,0.9945746,0.91861326,0.91861326
+319,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,getAddress,(Ljava/lang/String;)Ljavax/mail/internet/InternetAddress;,1,4,25.0%,"InternetAddress getAddress(String addressStr) {
+    try {
+      return new InternetAddress(addressStr);
+    } catch (AddressException e) {
+      addError(""Could not parse address ["" + addressStr + ""]."", e);
+      return null;
+    }
+  }",296-303,0.96591645,0.95230204,0.95230204
+320,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,isSSL,()Z,1,1,100.0%,"public boolean isSSL() {
+    return ssl;
+  }",588-590,0.9940393,0.9270279,0.9270279
+321,,,0,0,0,ch.qos.logback.core.net.SMTPAppenderBase,isSTARTTLS,()Z,1,1,100.0%,"public boolean isSTARTTLS() {
+    return starttls;
+  }",580-582,0.99354666,0.9397477,0.9397477
+322,,,0,0,0,ch.qos.logback.core.pattern.Converter,getNext,()Lch/qos/logback/core/pattern/Converter;,1,1,100.0%,"public final Converter<E> getNext() {
+    return next;
+  }",52-54,0.99103796,0.9096601,0.9096601
+323,,,0,0,0,ch.qos.logback.core.pattern.DynamicConverter,getOptionList,()Ljava/util/List;,1,1,100.0%,"protected List<String> getOptionList() {
+    return optionList;
+  }",73-75,0.9929513,0.9158612,0.9158612
+324,,,0,0,0,ch.qos.logback.core.pattern.LiteralConverter,convert,(Ljava/lang/Object;)Ljava/lang/String;,1,1,100.0%,"public String convert(E o) {
+    return literal;
+  }",24-26,0.9925495,0.9027151,0.9027151
+325,,,0,0,0,ch.qos.logback.core.pattern.parser.FormattingNode,getFormatInfo,()Lch/qos/logback/core/pattern/FormatInfo;,1,1,100.0%,"public FormatInfo getFormatInfo() {
+    return formatInfo;
+  }",30-32,0.99253666,0.9170469,0.9170469
+326,,,0,0,0,ch.qos.logback.core.pattern.parser.SimpleKeywordNode,getOptions,()Ljava/util/List;,1,1,100.0%,"public List<String> getOptions() {
+    return optionList;
+  }",30-32,0.992462,0.9123432,0.9123432
+327,,,0,0,0,ch.qos.logback.core.pattern.parser.Token,getType,()I,1,1,100.0%,"public int getType() {
+    return type;
+  }",53-55,0.9934012,0.9166083,0.9166083
+328,,,0,0,0,ch.qos.logback.core.pattern.parser.Token,getValue,()Ljava/lang/Object;,1,1,100.0%,"public Object getValue() {
+    return value;
+  }",57-59,0.991878,0.9057554,0.9057554
+329,,,0,0,0,ch.qos.logback.core.sift.DefaultDiscriminator,getDiscriminatingValue,(Ljava/lang/Object;)Ljava/lang/String;,1,1,100.0%,"public String getDiscriminatingValue(E e) {
+    return DEFAULT;
+  }",24-26,0.99599975,0.90931135,0.90931135
+330,,,0,0,0,ch.qos.logback.core.spi.ContextAwareBase,getContext,()Lch/qos/logback/core/Context;,1,1,100.0%,"public Context getContext() {
+    return this.context;
+  }",49-51,0.993542,0.9246686,0.9246686
+331,,,0,0,0,ch.qos.logback.core.spi.ContextAwareBase,getDeclaredOrigin,()Ljava/lang/Object;,1,1,100.0%,"protected Object getDeclaredOrigin() {
+    return declaredOrigin;
+  }",66-68,0.9935684,0.91397107,0.91397107
+332,,,0,0,0,ch.qos.logback.core.spi.ContextAwareImpl,getOrigin,()Ljava/lang/Object;,1,1,100.0%,"protected Object getOrigin() {
+    return origin;
+  }",42-44,0.99288946,0.9115294,0.9115294
+333,,,0,0,0,ch.qos.logback.core.spi.CyclicBufferTracker,buildComponent,(Ljava/lang/String;)Lch/qos/logback/core/helpers/CyclicBuffer;,1,1,100.0%,"@Override
+  protected CyclicBuffer<E> buildComponent(String key) {
+    return  new CyclicBuffer<E>(bufferSize);
+  }",51-54,0.9910243,0.9358335,0.9358335
+334,,,0,0,0,ch.qos.logback.core.spi.CyclicBufferTracker,isComponentStale,(Lch/qos/logback/core/helpers/CyclicBuffer;)Z,1,1,100.0%,"@Override
+  protected boolean isComponentStale(CyclicBuffer<E> eCyclicBuffer) {
+    return false;
+  }",56-59,0.9911329,0.9435805,0.9435805
+335,,,0,0,0,ch.qos.logback.core.status.OnConsoleStatusListener,getPrintStream,()Ljava/io/PrintStream;,1,1,100.0%,"@Override
+  protected PrintStream getPrintStream() {
+    return System.out;
+  }",27-30,0.9936909,0.93600917,0.93600917
+336,,,0,0,0,ch.qos.logback.core.status.StatusBase,getDate,()Ljava/lang/Long;,1,1,100.0%,"public Long getDate() {
+    return date;
+  }",109-111,0.9937873,0.92588174,0.92588174
+337,,,0,0,0,ch.qos.logback.core.status.StatusBase,getLevel,()I,1,1,100.0%,"public int getLevel() {
+    return level;
+  }",73-75,0.99348557,0.9217736,0.9217736
+338,,,0,0,0,ch.qos.logback.core.status.StatusBase,getMessage,()Ljava/lang/String;,1,1,100.0%,"public String getMessage() {
+    return message;
+  }",97-99,0.99480116,0.9245626,0.9245626
+339,,,0,0,0,ch.qos.logback.core.status.StatusBase,getThrowable,()Ljava/lang/Throwable;,1,1,100.0%,"public Throwable getThrowable() {
+    return throwable;
+  }",105-107,0.9936656,0.9118586,0.9118586
+340,,,0,0,0,ch.qos.logback.core.status.StatusUtil,hasXMLParsingErrors,(J)Z,1,1,100.0%,"public boolean hasXMLParsingErrors(long threshold) {
+    return containsMatch(threshold, Status.ERROR, CoreConstants.XML_PARSING);
+  }",85-87,0.9952488,0.9297236,0.9297236
+341,,,0,0,0,ch.qos.logback.core.status.StatusUtil,noXMLParsingErrorsOccurred,(J)Z,1,1,100.0%,"public boolean noXMLParsingErrorsOccurred(long threshold) {
+    return !hasXMLParsingErrors(threshold);
+  }",89-91,0.9904375,0.9482756,0.9482756
+342,,,0,0,0,ch.qos.logback.core.subst.Parser,isDefaultToken,(Lch/qos/logback/core/subst/Token;)Z,1,1,100.0%,"private boolean isDefaultToken(Token t) {
+    return t != null && t.type == Token.Type.DEFAULT;
+  }",132-134,0.9935835,0.93049973,0.93049973
+343,,,0,0,0,ch.qos.logback.core.subst.Parser,makeNewLiteralNode,(Ljava/lang/String;)Lch/qos/logback/core/subst/Node;,1,1,100.0%,"private Node makeNewLiteralNode(String s) {
+    return new Node(Node.Type.LITERAL, s);
+  }",101-103,0.9918053,0.9146112,0.9146112
+344,,,0,0,0,ch.qos.logback.core.subst.Parser,parse,()Lch/qos/logback/core/subst/Node;,1,1,100.0%,"public Node parse() throws ScanException {
+    return E();
+  }",45-47,0.9894744,0.901283,0.901283
+345,,,0,0,0,ch.qos.logback.core.util.EnvUtil,isJDK5,()Z,1,1,100.0%,"static public boolean isJDK5() {
+    return isJDK_N_OrHigher(5);
+  }",44-46,0.99298364,0.9397687,0.9397687
+346,,,0,0,0,ch.qos.logback.core.util.ExecutorServiceUtil,newExecutorService,()Ljava/util/concurrent/ExecutorService;,1,1,100.0%,"static public ExecutorService newExecutorService() {
+    return new ThreadPoolExecutor(CoreConstants.CORE_POOL_SIZE, 
+        CoreConstants.MAX_POOL_SIZE,
+        0L, TimeUnit.MILLISECONDS,
+        new SynchronousQueue<Runnable>());
+  }",35-40,0.99242216,0.9423256,0.9423256
+347,,,0,0,0,ch.qos.logback.core.util.OptionHelper,getSystemProperties,()Ljava/util/Properties;,1,3,33.3%,"public static Properties getSystemProperties() {
+    try {
+      return System.getProperties();
+    } catch (SecurityException e) {
+      return new Properties();
+    }
+  }",217-223,0.97503424,0.9616888,0.9616888
+348,,,0,0,0,ch.qos.logback.core.util.OptionHelper,getSystemProperty,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,1,3,33.3%,"public static String getSystemProperty(String key, String def) {
+    try {
+      return System.getProperty(key, def);
+    } catch (SecurityException e) {
+      return def;
+    }
+  }",157-163,0.92380977,0.9537586,0.9537586
+349,,overload of an earlier row - skipped,0,0,0,ch.qos.logback.core.util.OptionHelper,instantiateByClassName,(Ljava/lang/String;Ljava/lang/Class;Ljava/lang/ClassLoader;)Ljava/lang/Object;,1,1,100.0%,"public static Object instantiateByClassName(String className,
+                                              Class<?> superClass, Context context) throws IncompatibleClassException,
+          DynamicClassLoadingException {
+    ClassLoader classLoader = Loader.getClassLoaderOfObject(context);
+    return instantiateByClassName(className, superClass, classLoader);
+  }",31-36,-0.75783294,-0.7112578,-0.7112578

@@ -1,0 +1,14 @@
+tdrepro/projects/
+tdrepro/logs*/
+tdrepro/run_all.log
+tdrepro/status.txt
+Results/merged_failures.csv
+__pycache__/
+tdrepro/metadata/
+*:Zone.Identifier
+*Zone.Identifier
+tdrepro/conc_executed_methods/
+tdrepro/results/sequential_delay_injection_timing_top10.csv
+tdrepro/run_ui.log
+tdrepro/tmp-rq2-log.csv
+tdrepro/traces/

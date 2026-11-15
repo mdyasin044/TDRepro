@@ -1,0 +1,2055 @@
+rank,will_run,note,timing_score,timing_api_calls,synchronized_count,Class,Method,Descriptor,Lines Covered,Total Lines,Coverage %,Body,LineRange,sim_to_test,sim_to_log,combined_sim
+1,1,,15,15,0,com.vmware.admiral.service.common.NodeMigrationService,handlePatch,(Lcom/vmware/xenon/common/Operation;)V,17,17,100.0%,"@Override
+    public void handlePatch(Operation patch) {
+        NodeMigrationService patchState = patch.getBody(NodeMigrationService.class);
+        if (patchState.services != null && !patchState.services.isEmpty()) {
+            services.addAll(patchState.services);
+        }
+
+        // Add the factories that are not started from admiral
+        services.add(""/core/auth/credentials"");
+        services.add(""/resources/pools"");
+        services.add(""/resources/groups"");
+        services.add(""/resources/tags"");
+        services.add(""/resources/compute-descriptions"");
+
+        // Do not migrate these services
+        services.remove(ManagementUriParts.HOST_CONTAINER_LIST_DATA_COLLECTION);
+        services.remove(ManagementUriParts.CONTAINER_CONTROL_LOOP);
+        services.remove(ManagementUriParts.CONTAINER_HOST_DATA_COLLECTION);
+        services.remove(ManagementUriParts.HOST_NETWORK_LIST_DATA_COLLECTION);
+        services.remove(ManagementUriParts.HOST_VOLUME_LIST_DATA_COLLECTION);
+        services.remove(ManagementUriParts.EVENT_TOPIC);
+        services.remove(ManagementUriParts.EXTENSIBILITY_SUBSCRIPTION);
+
+        patch.complete();
+    }",70-94,0.9462048,0.9908263,0.9908263
+2,2,,11,11,0,com.vmware.admiral.common.util.ServiceDocumentQuery,queryUpdatedDocumentSince,(JLjava/lang/String;Ljava/util/function/Consumer;)V,16,16,100.0%,"public void queryUpdatedDocumentSince(long documentSinceUpdateTimeMicros,
+            String documentSelfLink,
+            Consumer<ServiceDocumentQueryElementResult<T>> completionHandler) {
+        AssertUtil.assertNotEmpty(documentSelfLink, ""documentSelfLink"");
+        AssertUtil.assertNotNull(type, ""type"");
+        AssertUtil.assertNotNull(completionHandler, ""completionHandler"");
+        QueryTask q = QueryUtil.buildPropertyQuery(type,
+                ServiceDocument.FIELD_NAME_SELF_LINK, documentSelfLink);
+        q.documentExpirationTimeMicros = getDefaultQueryExpiration();
+        q.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT);
+        if (documentSinceUpdateTimeMicros != -1) {
+            q.querySpec.options.add(QueryOption.INCLUDE_DELETED);
+            q.querySpec.query
+                    .addBooleanClause(createUpdatedSinceTimeRange(documentSinceUpdateTimeMicros));
+        }
+
+        host.sendRequest(Operation
+                .createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_QUERY_TASKS))
+                .setBody(q)
+                .setReferer(host.getUri())
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                completionHandler.accept(error(e));
+                                return;
+                            }
+                            try {
+                                QueryTask qtr = o.getBody(QueryTask.class);
+                                if (qtr.results.documents == null
+                                        || qtr.results.documents.isEmpty()) {
+                                    completionHandler.accept(noResult());
+                                } else {
+                                    Collection<Object> values = qtr.results.documents.values();
+                                    completionHandler.accept(result(values.iterator().next(),
+                                            values.size()));
+                                }
+                            } catch (Throwable ex) {
+                                completionHandler.accept(error(ex));
+                            }
+                        }));
+    }",95-135,0.9186447,0.9768939,0.9768939
+3,3,,11,11,0,com.vmware.admiral.common.util.ServiceDocumentQuery,getNextPageLinks,(Ljava/lang/String;ILjava/util/function/Consumer;)V,9,11,81.8%,"private void getNextPageLinks(String nextPageLink, int resultLimit,
+            Consumer<ServiceDocumentQueryElementResult<T>> handler) {
+        try {
+            if (nextPageLink == null) {
+                handler.accept(noResult());
+                return;
+            }
+
+            host.sendRequest(Operation
+                    .createGet(UriUtils.buildUri(this.host, nextPageLink))
+                    .setReferer(host.getUri())
+                    .setCompletion((o, e) -> {
+                        if (e != null) {
+                            handler.accept(error(e));
+                            return;
+                        }
+                        try {
+                            QueryTask page = o.getBody(QueryTask.class);
+
+                            if (isExpandQuery(page)) {
+                                Collection<Object> values = page.results.documents.values();
+                                for (Object json : values) {
+                                    handler.accept(result(json, values.size()));
+                                }
+                            } else if (isCountQuery(page)) {
+                                handler.accept(countResult(page.results.documentCount));
+                            } else {
+                                List<String> links = page.results.documentLinks;
+                                for (String link : links) {
+                                    handler.accept(resultLink(link, links.size()));
+                                }
+                            }
+
+                            getNextPageLinks(page.results.nextPageLink, resultLimit, handler);
+                        } catch (Throwable ex) {
+                            handler.accept(error(ex));
+                        }
+                    }));
+        } catch (Throwable ex) {
+            handler.accept(error(ex));
+        }
+    }",278-319,0.9062829,0.9709321,0.9709321
+4,4,,8,8,0,com.vmware.admiral.service.common.ConfigurationService,getConfigurationProperties,()[Lcom/vmware/admiral/service/common/ConfigurationService$ConfigurationState;,20,49,40.8%,"public static ConfigurationState[] getConfigurationProperties() {
+        Properties props = new Properties();
+
+        try (InputStream is = FileUtil.class
+                .getResourceAsStream(DEFAULT_CONFIGURATION_PROPERTIES_FILE_NAME)) {
+            props.load(is);
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    ""Unable to load resource:"" + DEFAULT_CONFIGURATION_PROPERTIES_FILE_NAME, e);
+        }
+
+        // Override the default values with custom properties.
+        // Properties starting with ""core"" are protected and cannot be overridden.
+        if (CUSTOM_CONFIGURATION_PROPERTIES_FILE_NAMES != null
+                && !CUSTOM_CONFIGURATION_PROPERTIES_FILE_NAMES.isEmpty()) {
+            for (String fileName : CUSTOM_CONFIGURATION_PROPERTIES_FILE_NAMES.split("","")) {
+                File f = new File(fileName);
+
+                if (f.exists()) {
+                    Properties customProps = FileUtil.getProperties(fileName, false);
+                    @SuppressWarnings(""unchecked"")
+                    Enumeration<String> customEnums = (Enumeration<String>) customProps
+                            .propertyNames();
+                    while (customEnums.hasMoreElements()) {
+                        String customKey = customEnums.nextElement();
+                        if (!customKey.startsWith(NO_OVERRIDE_PREFIX_MARKER_FOR_PROPERTIES)) {
+                            props.put(customKey, customProps.getProperty(customKey));
+                        }
+                    }
+                } else {
+                    // If file does not exist look it up as resource.
+                    Properties customProps = new Properties();
+
+                    try (InputStream is = FileUtil.class
+                            .getResourceAsStream(fileName)) {
+                        customProps.load(is);
+
+                        @SuppressWarnings(""unchecked"")
+                        Enumeration<String> customEnums = (Enumeration<String>) customProps
+                                .propertyNames();
+                        while (customEnums.hasMoreElements()) {
+                            String customKey = customEnums.nextElement();
+                            if (!customKey.startsWith(NO_OVERRIDE_PREFIX_MARKER_FOR_PROPERTIES)) {
+                                props.put(customKey, customProps.getProperty(customKey));
+                            }
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(
+                                ""Unable to load resource:"" + fileName, e);
+                    }
+                }
+            }
+        }
+
+        LinkedList<ConfigurationState> ls = new LinkedList<>();
+        @SuppressWarnings(""unchecked"")
+        Enumeration<String> enums = (Enumeration<String>) props.propertyNames();
+        while (enums.hasMoreElements()) {
+            String key = enums.nextElement();
+            String value = props.getProperty(key);
+            print(key, value);
+
+            ConfigurationState configState = new ConfigurationState();
+            configState.documentSelfLink = UriUtils
+                    .buildUriPath(ConfigurationFactoryService.SELF_LINK, key);
+            configState.key = key;
+            configState.value = value;
+            ls.add(configState);
+
+        }
+        return ls.toArray(new ConfigurationState[ls.size()]);
+    }",124-195,0.92826825,0.9826523,0.9826523
+5,5,,8,8,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,doPing,(Lcom/vmware/admiral/service/common/RegistryService$ApiVersion;Ljava/lang/String;Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;Ljava/util/function/Consumer;)V,12,15,80.0%,"private void doPing(ApiVersion apiVersion, String pingEndpoint,
+            RequestContext context, Consumer<Throwable> failureCallback) {
+        URI registryUri = context.request.resourceReference;
+        URI pingUri = UriUtils.extendUri(registryUri, pingEndpoint);
+
+        logInfo(""Pinging registry: %s"", pingUri);
+
+        String sslTrust = context.request.customProperties.get(SSL_TRUST_CERT_PROP_NAME);
+        if (sslTrust != null) {
+            String trustAlias = context.request.customProperties.get(SSL_TRUST_ALIAS_PROP_NAME);
+            trustManager.putDelegate(trustAlias, sslTrust);
+        }
+
+        Operation pingOp = Operation.createGet(pingUri)
+                .setReferer(URI.create(""/""))
+                .setCompletion((o, ex) -> {
+                    if (ex != null) {
+                        if (ApiVersion.V2 == apiVersion && o.getStatusCode() == 401) {
+                            if (context.tokenAlreadyRequested) {
+                                failureCallback.accept(ex);
+                                return;
+                            }
+
+                            String wwwAuthHeader = getHeader(WWW_AUTHENTICATE_HEADER,
+                                    o.getResponseHeaders());
+
+                            if (isBearerTokenChallenge(wwwAuthHeader)) {
+                                requestAuthorizationToken(wwwAuthHeader, context,
+                                        () -> doPing(apiVersion, pingEndpoint, context,
+                                                failureCallback),
+                                        failureCallback);
+                                return;
+                            }
+                        }
+                        // ping requests typically return status code 200 and ""true"" as the body
+                        // the status code is already handled by the operation as an exception
+                        failureCallback.accept(ex);
+                        return;
+                    } else {
+                        if (o.getStatusCode() != HTTP_OK) {
+                            String errMsg = String.format(""Pinging registry endpoint [%s] failed""
+                                    + "" with status code %s. Expected %s."",
+                                    pingUri, o.getStatusCode(), HTTP_OK);
+                            failureCallback.accept(new Exception(errMsg));
+                            return;
+                        }
+
+                        RegistryPingResponse pingResponse = new RegistryPingResponse();
+                        pingResponse.apiVersion = apiVersion;
+                        context.operation.setBody(pingResponse);
+                        context.operation.complete();
+                    }
+                });
+
+        String authorization = context.request.customProperties.get(AUTHORIZATION_HEADER);
+        if (authorization != null) {
+            pingOp.addRequestHeader(AUTHORIZATION_HEADER, authorization);
+        }
+
+        sendOperationWithClient(pingOp, context);
+    }",503-563,0.92868847,0.9820868,0.9820868
+6,6,,8,8,0,com.vmware.admiral.service.common.AbstractInitialBootService,ensureInstanceExists,(Lcom/vmware/xenon/common/ServiceDocument;Ljava/util/function/Consumer;)V,3,3,100.0%,"private void ensureInstanceExists(ServiceDocument state, Consumer<Throwable> callback) {
+        new ServiceDocumentQuery<>(getHost(), state.getClass())
+                .queryUpdatedDocumentSince(0, state.documentSelfLink, (r) -> {
+                    if (r.hasException()) {
+                        logSevere(""Can't query for system document: %s. Error: %s"",
+                                state.documentSelfLink,
+                                (r.getException() instanceof CancellationException)
+                                        ? r.getException().getClass().getName()
+                                        : Utils.toString(r.getException()));
+                        callback.accept(r.getException());
+                        return;
+                    } else if (r.hasResult()) {
+                        logFine(""Not creating document %s as it has been created before"",
+                                state.documentSelfLink);
+                        callback.accept(null);
+                    } else {
+                        createDefaultInstance(state, callback, RETRIES_COUNT);
+                    }
+                });
+    }",122-141,0.9402961,0.98738974,0.98738974
+7,7,,7,7,0,com.vmware.admiral.service.common.AbstractInitialBootService,createDefaultInstance,(Lcom/vmware/xenon/common/ServiceDocument;Ljava/util/function/Consumer;I)V,8,8,100.0%,"private void createDefaultInstance(ServiceDocument state, Consumer<Throwable> callback,
+            int retryCount) {
+        String factoryPath = UriUtils.getParentPath(state.documentSelfLink);
+        logInfo(""Creating Default instance for %s"", state.documentSelfLink);
+        sendRequest(Operation
+                .createPost(this, factoryPath)
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE)
+                .setBody(state)
+                .setCompletion(
+                        (op, ex) -> {
+                            if (ex != null) {
+                                if (retryCount > 0 && !(ex instanceof CancellationException)) {
+                                    logWarning(
+                                            ""Retrying with count %s after error creating default %s""
+                                                    + "" instance for factory %s. Error: %s"",
+                                            retryCount, state.documentSelfLink, factoryPath,
+                                            Utils.toString(ex));
+                                    /*
+                                     * The factory should be up an available since we
+                                     * registerForServiceAvailability before that.
+                                     * However, it often fails with service not found.
+                                     * Hence, the retries and the wait here.
+                                     */
+                                    getHost().schedule(() -> {
+                                        logInfo(""Waiting for the default %s instance for factory %s""
+                                                        + "" to be created"",
+                                                state.documentSelfLink, factoryPath);
+                                        createDefaultInstance(state, callback, retryCount - 1);
+                                    }, RETRIES_WAIT, TimeUnit.MILLISECONDS);
+                                } else {
+                                    logWarning(""Error creating default %s instance for factory %s.""
+                                                    + "" Error: %s"",
+                                            state.documentSelfLink, factoryPath,
+                                            ex instanceof CancellationException
+                                                    ? ex.getClass().getName()
+                                                    : Utils.toString(ex));
+                                    callback.accept(ex);
+                                }
+                                return;
+                            }
+
+                            logInfo(""Default instance created: %s"", state.documentSelfLink);
+                            callback.accept(null);
+                        }));
+
+    }",151-196,0.90911347,0.9708266,0.9708266
+8,8,,7,7,0,com.vmware.admiral.adapter.common.AdapterRequest,validate,()V,7,11,63.6%,"public void validate() {
+        StringBuilder sb = new StringBuilder();
+        if (resourceReference == null) {
+            sb.append(""'resourceReference' is required."");
+        }
+        if (serviceTaskCallback == null || serviceTaskCallback.serviceSelfLink == null
+                || serviceTaskCallback.serviceSelfLink.isEmpty()) {
+            sb.append("" 'service callback reference' is required."");
+        }
+        if (operationTypeId == null || operationTypeId.isEmpty()) {
+            sb.append("" 'operationTypeId' is required for callback: ""
+                    + serviceTaskCallback.serviceSelfLink);
+        }
+        if (sb.length() > 0) {
+            throw new IllegalArgumentException(sb.toString());
+        }
+    }",45-61,0.80136937,0.88801026,0.88801026
+9,9,,6,6,0,com.vmware.admiral.service.common.CommonInitialBootService,handlePost,(Lcom/vmware/xenon/common/Operation;)V,11,11,100.0%,"@Override
+    public void handlePost(Operation post) {
+
+        // Configuration states documents
+
+        initInstances(Operation.createGet(null), false, false,
+                ConfigurationService.getConfigurationProperties());
+
+        // Other documents
+
+        List<ServiceDocument> resources = new ArrayList<>();
+        resources.add(ResourceNamePrefixService.buildDefaultStateInstance());
+        resources.add(buildUniqueProjectNamesInstance());
+        resources.add(buildUniqueProjectIndexesInstance());
+
+        ServiceDocument defaultRegistryState = RegistryService.buildDefaultStateInstance(getHost());
+        if (defaultRegistryState != null) {
+            resources.add(defaultRegistryState);
+        }
+
+        initInstances(post, resources.toArray(new ServiceDocument[resources.size()]));
+    }",29-50,0.97548896,0.99476016,0.99476016
+10,10,,6,6,0,com.vmware.photon.controller.model.security.util.CertificateUtil,getCommonName,(Ljava/security/Principal;)Ljava/lang/String;,5,8,62.5%,"public static String getCommonName(Principal certPrincipal) {
+        if (certPrincipal == null || certPrincipal.getName() == null
+                || certPrincipal.getName().isEmpty()) {
+            return null;
+        }
+        String attr = getAttributeFromDN(certPrincipal.getName(), ""CN"");
+        if (attr == null) {
+            Utils.logWarning(""DN %s doesn't contain attribute 'CN'"", certPrincipal.getName());
+            attr = certPrincipal.getName();
+        }
+        return attr;
+
+    }",376-388,0.79898775,0.88663125,0.88663125
+11,,,5,5,0,com.vmware.admiral.host.HostInitCommonServiceConfig,waitCommonInitialBootInitialization,(Lcom/vmware/xenon/common/ServiceHost;)V,12,19,63.2%,"private static void waitCommonInitialBootInitialization(ServiceHost host) {
+        Throwable[] t = new Throwable[1];
+        CountDownLatch l = new CountDownLatch(1);
+        host.sendRequest(Operation
+                .createPost(UriUtils.buildUri(host, CommonInitialBootService.class))
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_QUEUE_FOR_SERVICE_AVAILABILITY)
+                .setReferer(host.getUri())
+                .setBody(new ServiceDocument())
+                .setCompletion((o, e) -> {
+                    try {
+                        if (e != null) {
+                            host.log(Level.SEVERE, ""Failure while waiting for service availability""
+                                    + "" of common services: %s"", Utils.toString(e));
+                            t[0] = e;
+                            return;
+                        }
+                        host.log(Level.INFO, ""Waiting for service availability of common services""
+                                + "" finished."");
+                    } finally {
+                        l.countDown();
+                    }
+                }
+        ));
+        try {
+            if (!l.await(COMMON_SERVICES_AVAILABILITY_TIMEOUT, TimeUnit.SECONDS)) {
+                t[0] = new TimeoutException(""Waiting for service availability of common services""
+                        + "" timed out."");
+                host.log(Level.SEVERE, ""Waiting for service availability of common services timed""
+                                + "" out: %s"", t[0]);
+            }
+        } catch (InterruptedException e1) {
+            host.log(Level.SEVERE, ""Waiting for service availability of common services was""
+                            + "" interrupted: %s"", Utils.toString(e1));
+            t[0] = e1;
+        }
+        if (t[0] != null) {
+            throw new RuntimeException(t[0]);
+        }
+    }",124-162,0.87123805,0.94731367,0.94731367
+12,,,5,5,0,com.vmware.admiral.service.common.SslTrustCertificateService,handlePut,(Lcom/vmware/xenon/common/Operation;)V,11,15,73.3%,"@Override
+    public void handlePut(Operation put) {
+        if (!checkForBody(put)) {
+            return;
+        }
+
+        SslTrustCertificateState body = put.getBody(SslTrustCertificateState.class);
+        SslTrustCertificateState state = getState(put);
+        // these properties can't be modified once set:
+        body.subscriptionLink = state.subscriptionLink;
+
+        boolean validated = ValidationUtils.validate(put, () -> validateStateOnStart(body));
+        if (!validated) {
+            return;
+        }
+
+        this.setState(put, body);
+        put.setBody(body);
+        if (isModified(put, state.certificate, body.certificate)) {
+            put.complete();
+            notifyLastUpdatedSslTrustDocumentService();
+        } else {
+            put.complete();
+        }
+    }",190-214,0.95839185,0.9900103,0.9900103
+13,,,5,5,0,com.vmware.photon.controller.model.security.util.CertificateUtil,createCertificateChain,(Ljava/lang/String;)[Ljava/security/cert/X509Certificate;,9,12,75.0%,"public static X509Certificate[] createCertificateChain(String certChainPEM) {
+        AssertUtil.assertNotNull(certChainPEM, ""certChainPEM should not be null."");
+
+        List<X509Certificate> chain = new ArrayList<>();
+        try (PEMParser parser = new PEMParser(new StringReader(certChainPEM))) {
+
+            JcaX509CertificateConverter converter = new JcaX509CertificateConverter();
+            X509CertificateHolder certificateHolder;
+            while ((certificateHolder = (X509CertificateHolder) parser.readObject()) != null) {
+                chain.add(converter.getCertificate(certificateHolder));
+            }
+        } catch (IOException | CertificateException e) {
+            throw new RuntimeException(""Failed to create certificate: "" + certChainPEM, e);
+        }
+
+        if (chain.isEmpty()) {
+            throw new RuntimeException(""A valid certificate was not found: "" + certChainPEM);
+        }
+
+        return chain.toArray(new X509Certificate[chain.size()]);
+    }",150-170,0.94780856,0.9905523,0.9905523
+14,,,5,5,0,com.vmware.admiral.common.util.ServerX509TrustManager$SslTrustQueryCompletionHandler,accept,(Lcom/vmware/admiral/common/util/ServiceDocumentQuery$ServiceDocumentQueryElementResult;)V,7,12,58.3%,"@Override
+        public void accept(ServiceDocumentQueryElementResult<SslTrustCertificateState> result) {
+            if (result.hasException()) {
+                Utils.logWarning(""Exception during ssl trust cert loading: %s"",
+                        (result.getException() instanceof CancellationException)
+                                ? result.getException().getClass().getName()
+                                : Utils.toString(result.getException()));
+            } else if (result.hasResult()) {
+                SslTrustCertificateState sslTrustCert = result.getResult();
+                self.host.log(Level.FINE, ""Adding certificate %s"", sslTrustCert.fingerprint);
+
+                if (ServiceDocument.isDeleted(sslTrustCert)) {
+                    deleteCertificate(sslTrustCert.getAlias());
+                } else {
+                    loadCertificate(sslTrustCert);
+                }
+            }
+        }",331-348,0.91569996,0.9744823,0.9744823
+15,,,5,5,0,com.vmware.admiral.service.common.RegistryService,handleGet,(Lcom/vmware/xenon/common/Operation;)V,6,11,54.5%,"@Override
+    public void handleGet(Operation get) {
+        RegistryState currentState = getState(get);
+        boolean doExpand = get.getUri().getQuery() != null
+                && get.getUri().getQuery().contains(UriUtils.URI_PARAM_ODATA_EXPAND);
+        if (!doExpand || currentState.authCredentialsLink == null) {
+            get.setBody(currentState).complete();
+            return;
+        }
+
+        // retrieve the authnCredentials and include in an augmented version of the current state
+        Operation getDesc = Operation
+                .createGet(this, currentState.authCredentialsLink)
+                .setCompletion(
+                        (o, e) -> {
+                            if (e != null) {
+                                get.fail(e);
+                                return;
+                            }
+                            AuthCredentialsServiceState authCredentials = o
+                                    .getBody(AuthCredentialsServiceState.class);
+                            RegistryAuthState regWithAuth = RegistryAuthState
+                                    .create(authCredentials, currentState);
+                            get.setBody(regWithAuth).complete();
+                        });
+        sendRequest(getDesc);
+    }",226-252,0.9272595,0.9806597,0.9806597
+16,,,5,5,0,com.vmware.admiral.host.HostInitServiceHelper,startService,(Lcom/vmware/xenon/common/ServiceHost;Ljava/lang/Class;Lcom/vmware/xenon/common/Service;)V,5,5,100.0%,"public static void startService(ServiceHost host, Class<? extends Service> serviceClass,
+            Service serviceInstance) {
+
+        long startTime = System.currentTimeMillis();
+        host.startService(
+                Operation.createPost(UriUtils.buildUri(host, serviceClass))
+                        .setCompletion((o, ex) -> {
+                            long endTime = System.currentTimeMillis();
+                            // temporary log to trace down service startup time
+                            host.log(Level.INFO, ""Start service %s took %d millis to complete"",
+                                    o.getUri(), endTime - startTime);
+                            if (ex != null) {
+                                // shutdown the server when encountering an error
+                                host.log(Level.SEVERE,
+                                        ""Stopping the host because service %s failed to start: %s"",
+                                        o.getUri(), Utils.toString(ex));
+
+                                host.stop();
+                                return;
+                            }
+                        }),
+                serviceInstance);
+    }",77-99,0.9260348,0.98127556,0.98127556
+17,,,5,5,0,com.vmware.admiral.service.common.AbstractInitialBootService,initInstance,(Lcom/vmware/xenon/common/ServiceDocument;ZLjava/util/function/Consumer;)V,4,9,44.4%,"private void initInstance(ServiceDocument state, boolean checkIfExists,
+            Consumer<Throwable> callback) {
+        String factoryPath = UriUtils.getParentPath(state.documentSelfLink);
+        try {
+            getHost().registerForServiceAvailability((o, e) -> {
+                if (e != null) {
+                    logSevere(""Error waiting for service: %s. Error: %s"",
+                            factoryPath, Utils.toString(e));
+                    callback.accept(e);
+                    return;
+                }
+                if (checkIfExists) {
+                    ensureInstanceExists(state, callback);
+                } else {
+                    createDefaultInstance(state, callback, RETRIES_COUNT);
+                }
+            }, true, factoryPath);
+        } catch (Throwable t) {
+            logSevere(""Error registering for service availability: %s. Error: %s"",
+                    state.documentSelfLink, (t instanceof CancellationException)
+                            ? t.getClass().getName() : Utils.toString(t));
+            callback.accept(t);
+            return;
+        }
+    }",84-108,0.93159795,0.98101795,0.98101795
+18,,,5,5,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,initNoProxyClient,(Ljava/util/Map;)V,3,11,27.3%,"private void initNoProxyClient(Map<String, String> props) {
+        // create plain, no proxied client
+        serviceClientNoProxy = ServiceClientFactory.createServiceClient(trustManager, null);
+
+        if (props != null) {
+            String registryProxyAddress = props.get(REGISTRY_PROXY_PARAM_NAME);
+            String registryNoProxiedHosts = props.get(REGISTRY_NO_PROXY_LIST_PARAM_NAME);
+
+            if (registryNoProxiedHosts != null
+                    && !registryNoProxiedHosts.equals(REGISTRY_PROXY_NULL_VALUE)
+                    && registryProxyAddress != null
+                    && !registryProxyAddress.equals(REGISTRY_PROXY_NULL_VALUE)) {
+                logInfo(""Setting non-proxied registry hosts: %s"", registryNoProxiedHosts);
+                serviceClientNoProxyList.addAll(
+                        Arrays.asList(registryNoProxiedHosts.split(""\\s*,\\s*"")));
+            }
+        }
+    }",167-184,0.9455304,0.99030113,0.99030113
+19,,,5,5,0,com.vmware.admiral.common.util.ServerX509TrustManager,verifySubscriptionTargetExists,(Ljava/lang/Runnable;)V,3,3,100.0%,"private void verifySubscriptionTargetExists(Runnable handler) {
+        new ServiceDocumentQuery<>(host, ConfigurationState.class)
+                .queryDocument(SSL_TRUST_CONFIG_SUBSCRIBE_FOR_LINK, (r) -> {
+                    if (r.hasException()) {
+                        r.throwRunTimeException();
+                    } else if (r.hasResult()) {
+                        // subscription is possible, proceed.
+                        try {
+                            handler.run();
+                        } catch (Throwable t) {
+                            Utils.logWarning(""%s"", Utils.toString(t));
+                        }
+                    } else {
+                        // create new configuration element in order to subscribe to it
+                        ConfigurationState body = new ConfigurationState();
+                        body.key = SSL_TRUST_LAST_UPDATED_DOCUMENT_KEY;
+                        body.documentSelfLink = body.key;
+                        body.value = ""__initial-value"";
+                        host.sendRequest(Operation.createPost(
+                                UriUtils.buildUri(host, ConfigurationFactoryService.SELF_LINK))
+                                .setReferer(host.getUri())
+                                .setBody(body)
+                                .setCompletion((o, e) -> {
+                                    if (e != null) {
+                                        Utils.logWarning(""%s"", Utils.toString(e));
+                                        return;
+                                    }
+                                    handler.run();
+                                }));
+                    }
+                });
+    }",275-306,0.94043505,0.9875097,0.9875097
+20,,,4,4,0,com.vmware.admiral.common.util.SubscriptionManager,handleNotification,(Lcom/vmware/xenon/common/Operation;Ljava/util/function/Consumer;)V,11,19,57.9%,"private void handleNotification(Operation op,
+            Consumer<SubscriptionNotification<T>> notificationHandler) {
+        try {
+            host.log(Level.INFO, ""Notification received for action: [%s] and uri: [%s]"",
+                    op.getAction(), op.getUri());
+            SubscriptionNotification<T> notification = new SubscriptionNotification<>();
+
+            if (Action.DELETE == op.getAction()) {
+                if (!op.hasBody()) { // service stopped. no changes to the state.
+                    op.complete();
+                    return;
+                } else {
+                    notification.operation = NotificationOperation.DELETE;
+                    // the subscription is already deleted with the deletion of the document
+                    // just reset the subscription link.
+                    this.subscriptionLink = null;
+                }
+            } else {
+                notification.operation = NotificationOperation.UPDATE;
+            }
+
+            if (op.hasBody()) {
+                notification.result = op.getBody(this.type);
+            }
+            notificationHandler.accept(notification);
+            op.complete();
+        } catch (Throwable e) {
+            Utils.logWarning(""Error handling notifications. Error: %s"", Utils.toString(e));
+            op.fail(e);
+        }
+    }",323-353,0.92219293,0.9776946,0.9776946
+21,,,4,4,0,com.vmware.admiral.common.util.ServiceUtils,addServiceRequestRoute,(Lcom/vmware/xenon/common/ServiceDocument;Lcom/vmware/xenon/common/Service$Action;Ljava/lang/String;Ljava/lang/Class;)V,10,15,66.7%,"public static void addServiceRequestRoute(ServiceDocument serviceDocument, Action action,
+            String description, Class responseType) {
+        if (serviceDocument == null) {
+            return;
+        }
+
+        if (serviceDocument.documentDescription == null) {
+            serviceDocument.documentDescription = new ServiceDocumentDescription();
+        }
+
+        if (serviceDocument.documentDescription.serviceRequestRoutes == null) {
+            serviceDocument.documentDescription.serviceRequestRoutes = new HashMap<>();
+        }
+
+        RequestRouter.Route route = new RequestRouter.Route();
+        route.action = action;
+        route.description = description;
+        route.responseType = responseType;
+
+        if (!serviceDocument.documentDescription.serviceRequestRoutes.containsKey(route.action)) {
+            serviceDocument.documentDescription.serviceRequestRoutes
+                    .put(route.action, new ArrayList<>());
+        }
+        serviceDocument.documentDescription.serviceRequestRoutes.get(route.action).add(route);
+    }",60-84,0.76727176,0.87523806,0.87523806
+22,,,4,4,0,com.vmware.admiral.service.common.SslTrustCertificateService,notifyLastUpdatedSslTrustDocumentService,()V,8,8,100.0%,"private void notifyLastUpdatedSslTrustDocumentService() {
+        ConfigurationState body = new ConfigurationState();
+        body.key = SslTrustCertificateService.SSL_TRUST_LAST_UPDATED_DOCUMENT_KEY;
+        body.documentSelfLink = UriUtils.buildUriPath(ConfigurationFactoryService.SELF_LINK,
+                body.key);
+        body.value = getSelfLink();
+
+        sendRequest(Operation.createPut(this, body.documentSelfLink)
+                .setBody(body)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        if (e instanceof ServiceNotFoundException) {
+                            sendRequest(Operation
+                                    .createPost(this, ConfigurationFactoryService.SELF_LINK)
+                                    .setBody(body)
+                                    .setCompletion((oo, ee) -> {
+                                        if (ee != null) {
+                                            logWarning(""Error notifying last updated ssl trust""
+                                                            + "" document: %s. Error: %s"",
+                                                    getSelfLink(), Utils.toString(ee));
+                                            return;
+                                        }
+                                        logFine(""Last updated ssl trust document completed."");
+                                    }));
+                            return;
+                        }
+                        logWarning(""Error notifying last updated ssl trust document: %s. Error: %s"",
+                                getSelfLink(), Utils.toString(e));
+                        return;
+                    }
+
+                    logFine(""Last updated ssl trust document completed."");
+                }));
+    }",255-288,0.8988753,0.9658239,0.9658239
+23,,,4,4,0,com.vmware.photon.controller.model.security.util.CertificateUtil,checkIfCertificateExistsMoreThanOneTimeInChain,(Ljava/util/List;Ljava/security/cert/X509Certificate;)V,7,11,63.6%,"private static void checkIfCertificateExistsMoreThanOneTimeInChain(
+            List<X509Certificate> certificates, X509Certificate certificate) {
+
+        int exists = 0;
+
+        for (X509Certificate currentcert : certificates) {
+            if (certificate.equals(currentcert) && exists >= 1) {
+                String errorMsg = String.format(
+                        ""Certificate with subject: %s exists in more than one place in chain."",
+                        certificate.getSubjectX500Principal().getName());
+                throw new LocalizableValidationException(errorMsg,
+                        ""security.certificate.exists.in.chain"",
+                        certificate.getSubjectX500Principal().getName());
+            } else if (certificate.equals(currentcert)) {
+                exists++;
+            }
+        }
+    }",632-649,0.95037824,0.99112207,0.99112207
+24,,,4,4,0,com.vmware.admiral.common.util.ServerX509TrustManager,schedulePeriodicCertificatesReload,()V,6,9,66.7%,"private void schedulePeriodicCertificatesReload() {
+        long nextDelay = (reloadCounter.get() > reloadCounterThreshold) ?
+                maintenanceInterval :
+                maintenanceIntervalInitial;
+
+        if (host.isStopping()) {
+            return;
+        }
+
+        Runnable task = () -> {
+            try {
+                host.log(Level.FINE, ""Host %s reloading all certificates"", host.getPublicUri());
+                documentUpdateTimeMicros = 0;
+                loadSslTrustCertServices();
+
+                reloadCounter.updateAndGet((r) -> (r > reloadCounterThreshold) ? r : r + 1);
+
+                schedulePeriodicCertificatesReload();
+            } catch (Exception e) {
+                host.log(Level.WARNING, e.getMessage());
+                host.log(Level.FINE, Utils.toString(e));
+
+                schedulePeriodicCertificatesReload();
+            }
+        };
+
+        try {
+            host.schedule(task, nextDelay, TimeUnit.MICROSECONDS);
+        } catch (Exception e) {
+            host.log(Level.INFO, ""Host is stopping"");
+        }
+    }",207-238,0.92684555,0.98005706,0.98005706
+25,,,4,4,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,fetchAuthCredentials,(Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;Ljava/lang/Runnable;)V,4,7,57.1%,"private void fetchAuthCredentials(RequestContext context, Runnable callback) {
+        String authCredentialsLink = context.request.customProperties.get(
+                RegistryState.FIELD_NAME_AUTH_CREDENTIALS_LINK);
+
+        if (authCredentialsLink == null) {
+            callback.run();
+            return;
+        }
+
+        sendRequest(Operation.createGet(this, authCredentialsLink)
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        context.operation.fail(e);
+                        return;
+                    }
+
+                    AuthCredentialsServiceState authCredentialsState = o
+                            .getBody(AuthCredentialsServiceState.class);
+                    processAuthentication(context, authCredentialsState);
+
+                    callback.run();
+                }));
+    }",281-303,0.9597897,0.99356985,0.99356985
+26,,,4,4,0,com.vmware.admiral.common.util.ServiceDocumentQuery,processQuery,(Lcom/vmware/xenon/services/common/QueryTask;Ljava/util/function/Consumer;)V,4,11,36.4%,"private void processQuery(QueryTask q,
+            Consumer<ServiceDocumentQueryElementResult<T>> handler) {
+        if (TaskState.isFailed(q.taskInfo)) {
+            handler.accept(error(new IllegalStateException(
+                    q.taskInfo.failure.message)));
+            return;
+        }
+
+        if (q.taskInfo.isDirect || TaskState.isFinished(q.taskInfo)) {
+            processQueryResult(q, handler);
+            return;
+        }
+
+        host.sendRequest(Operation
+                .createGet(UriUtils.buildUri(host, q.documentSelfLink))
+                .setReferer(host.getUri())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        handler.accept(error(e));
+                        return;
+                    }
+
+                    QueryTask rsp = o.getBody(QueryTask.class);
+
+                    if (!TaskState.isFinished(rsp.taskInfo)) {
+                        host.log(Level.FINE,
+                                ""Resource query not complete yet, retrying..."");
+                        host.schedule(() -> {
+                            processQuery(rsp, handler);
+                        }, QueryUtil.QUERY_RETRY_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+                        return;
+                    }
+
+                    processQueryResult(rsp, handler);
+                }));
+    }",199-234,0.91641927,0.97501266,0.97501266
+27,,,3,3,0,com.vmware.admiral.service.common.RegistryFactoryService,handlePost,(Lcom/vmware/xenon/common/Operation;)V,17,19,89.5%,"@Override
+    public void handlePost(Operation post) {
+        /**
+         * If it is an internal xenon request, proceed with the operation.
+         */
+        if (post.isSynchronize()) {
+            super.handlePost(post);
+            return;
+        }
+
+        QueryTask queryTask = QueryUtil.buildQuery(RegistryState.class, true);
+        RegistryState registry = post.getBody(RegistryState.class);
+        AssertUtil.assertNotNullOrEmpty(registry.address, ""registry.address"");
+        Query parentsClause = new Query()
+                .setTermPropertyName(RegistryState.FIELD_NAME_ADDRESS)
+                .setTermMatchValue(registry.address)
+                .setTermMatchType(MatchType.TERM)
+                .setOccurance(Occurance.MUST_OCCUR);
+
+        queryTask.querySpec.query.addBooleanClause(parentsClause);
+        queryTask.querySpec.query.addBooleanClause(QueryUtil
+                .addTenantGroupAndUserClause(registry.tenantLinks));
+        QueryUtil.addExpandOption(queryTask);
+
+        List<RegistryState> registries = new ArrayList<RegistryState>();
+        new ServiceDocumentQuery<RegistryState>(getHost(),
+                RegistryState.class)
+                .query(queryTask, (r) -> {
+                    if (r.hasException()) {
+                        post.fail(r.getException());
+                        logSevere(""Failed to get registry state with address %s"",
+                                registry.address);
+                    } else if (r.hasResult()) {
+                        registries.add(r.getResult());
+                    } else {
+                        if (registries.isEmpty()) {
+                            super.handlePost(post);
+                        } else {
+                            if (!post.hasPragmaDirective(Operation.PRAGMA_DIRECTIVE_FROM_MIGRATION_TASK)) {
+                                post.fail(new LocalizableValidationException(
+                                        REGISTRY_ALREADY_EXISTS,
+                                        ""compute.registry.host.address.already.exists""));
+                            } else {
+                                super.handlePost(post);
+                            }
+                        }
+                    }
+                });
+    }",51-99,0.9393002,0.98536396,0.98536396
+28,,,3,3,0,com.vmware.admiral.common.util.ReflectionUtils,setAnnotation,(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/annotation/Annotation;)V,13,17,76.5%,"@SuppressWarnings(""unchecked"")
+    public static void setAnnotation(Class<?> targetClass,
+            Class<? extends Annotation> targetAnnotation, Annotation targetValue) {
+        AssertUtil.assertNotNull(targetClass, ""targetClass"");
+        AssertUtil.assertNotNull(targetAnnotation, ""targetAnnotation"");
+        AssertUtil.assertNotNull(targetValue, ""targetValue"");
+        try {
+            Method method = Class.class.getDeclaredMethod(ANNOTATION_METHOD);
+            method.setAccessible(true);
+
+            Object annotationData = method.invoke(targetClass);
+
+            Field annotations = annotationData.getClass().getDeclaredField(ANNOTATIONS);
+            annotations.setAccessible(true);
+
+            Map<Class<? extends Annotation>, Annotation> map = (Map<Class<? extends Annotation>, Annotation>) annotations
+                    .get(annotationData);
+            map.put(targetAnnotation, targetValue);
+        } catch (ReflectiveOperationException e) {
+            logger.warning(String.format(""Could not set class %s annotation %s to value %s!"",
+                    targetClass.getSimpleName(), targetAnnotation.getSimpleName(),
+                    targetValue.getClass().getSimpleName()));
+        }
+    }",32-55,0.941492,0.98707545,0.98707545
+29,,,3,3,0,com.vmware.admiral.common.util.ServiceDocumentQuery,query,(Lcom/vmware/xenon/services/common/QueryTask;Ljava/util/function/Consumer;)V,10,11,90.9%,"public void query(QueryTask q,
+            Consumer<ServiceDocumentQueryElementResult<T>> completionHandler) {
+        if (q.documentExpirationTimeMicros == 0) {
+            q.documentExpirationTimeMicros = getDefaultQueryExpiration();
+        }
+        if (!(isCountQuery(q)) && q.querySpec.resultLimit == null) {
+            q.querySpec.resultLimit = DEFAULT_QUERY_RESULT_LIMIT;
+        }
+        q.querySpec.options.add(QueryOption.SINGLE_USE);
+
+        host.sendRequest(Operation
+                .createPost(UriUtils.buildUri(host, ServiceUriPaths.CORE_QUERY_TASKS))
+                .setBody(q)
+                .setReferer(host.getUri())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        completionHandler.accept(error(e));
+                        return;
+                    }
+                    QueryTask qrt = o.getBody(QueryTask.class);
+                    processQuery(qrt, completionHandler);
+                }));
+    }",175-197,0.94556797,0.9886888,0.9886888
+30,,,3,3,0,com.vmware.photon.controller.model.security.util.CertificateUtil,validateCertificateChain,([Ljava/security/cert/X509Certificate;)V,9,19,47.4%,"public static void validateCertificateChain(X509Certificate[] certificateChain)
+            throws Exception {
+        List<X509Certificate> certificates = Arrays.asList(certificateChain);
+
+        for (X509Certificate certificate : certificates) {
+            checkIfCertificateExistsMoreThanOneTimeInChain(certificates, certificate);
+        }
+
+        Iterator<X509Certificate> it = certificates.iterator();
+
+        X509Certificate current = it.next();
+        current.checkValidity();
+
+        while (it.hasNext()) {
+            X509Certificate next = it.next();
+            next.checkValidity();
+
+            try {
+                current.verify(next.getPublicKey());
+            } catch (InvalidKeyException | CertificateException | NoSuchAlgorithmException
+                    | NoSuchProviderException e) {
+                throw new IllegalArgumentException(e);
+            } catch (SignatureException e) {
+                throw new LocalizableValidationException(""Certificate chain is not valid."",
+                        ""security.certificate.invalid"");
+            }
+            current = next;
+        }
+    }",602-630,0.91643476,0.97353,0.97353
+31,,,3,3,0,com.vmware.admiral.host.HostInitServiceHelper,populateServicesForHealthCheck,(Lcom/vmware/xenon/common/ServiceHost;Lcom/vmware/xenon/common/Service;Ljava/lang/Class;Ljava/util/Set;Z)V,8,10,80.0%,"private static void populateServicesForHealthCheck(ServiceHost host, Service serviceInstance,
+            Class<? extends Service> serviceClass, Set<String> servicesForHelathceck,
+            boolean factory) {
+
+        String factoryOrSelfLink = factory ? ""FACTORY_LINK"" : ""SELF_LINK"";
+
+        if (serviceInstance.hasOption(ServiceOption.REPLICATION)) {
+            try {
+                Field selfLink = serviceClass.getDeclaredField(factoryOrSelfLink);
+                if (selfLink != null) {
+                    Object value = selfLink.get(serviceInstance);
+                    servicesForHelathceck.add(value.toString());
+                }
+            } catch (NoSuchFieldException | IllegalAccessException
+                    | IllegalArgumentException e) {
+                host.log(Level.SEVERE, ""Exception while getting %s field for Service: %s :%s"",
+                        factoryOrSelfLink, serviceClass, e);
+            }
+        }
+    }",101-120,0.958821,0.9935709,0.9935709
+32,,,3,3,0,com.vmware.admiral.service.common.SslTrustCertificateService,handleCreate,(Lcom/vmware/xenon/common/Operation;)V,8,12,66.7%,"@Override
+    public void handleCreate(Operation post) {
+        if (!checkForBody(post)) {
+            return;
+        }
+
+        SslTrustCertificateState state = post.getBody(SslTrustCertificateState.class);
+        if (state.documentVersion > 0) {
+            post.complete();
+            return;
+        }
+
+        boolean validated = ValidationUtils.validate(post, () -> validateStateOnStart(state));
+        if (!validated) {
+            return;
+        }
+        post.complete();
+        notifyLastUpdatedSslTrustDocumentService();
+    }",144-162,0.9367459,0.9818425,0.9818425
+33,,,3,3,0,com.vmware.admiral.host.interceptor.OperationInterceptorRegistry,checkForInterceptor,(Lcom/vmware/xenon/common/Service;)Ljava/util/Collection;,7,11,63.6%,"private Collection<InterceptorData> checkForInterceptor(Service service) {
+        Collection<InterceptorData> data = this.serviceInterceptors.get(service.getClass());
+        if (data != null) {
+            return data;
+        }
+
+        if (service instanceof FactoryService) {
+            try {
+                Service actualInstance = ((FactoryService) service).createServiceInstance();
+                data = this.factoryServiceInterceptors.get(actualInstance.getClass());
+            } catch (Throwable e) {
+                service.getHost().log(Level.WARNING, ""Failure instantiating service instance: %s"",
+                        Utils.toString(e));
+            }
+        }
+        return data;
+    }",87-103,0.94039714,0.98049176,0.98049176
+34,,,3,3,0,com.vmware.admiral.service.common.ConfigurationService,handlePut,(Lcom/vmware/xenon/common/Operation;)V,6,7,85.7%,"@Override
+    public void handlePut(Operation put) {
+        if (!checkForBody(put)) {
+            return;
+        }
+
+        ConfigurationState body = put.getBody(ConfigurationState.class);
+        validate(body);
+
+        this.setState(put, body);
+        put.setBody(body).complete();
+    }",99-110,0.95392644,0.9839775,0.9839775
+35,,,3,3,0,com.vmware.admiral.service.common.NodeHealthCheckService,handlePatch,(Lcom/vmware/xenon/common/Operation;)V,5,5,100.0%,"@Override
+    public void handlePatch(Operation patch) {
+        NodeHealthCheckService patchState = patch.getBody(NodeHealthCheckService.class);
+        if (patchState.services != null && !patchState.services.isEmpty()) {
+            services.addAll(patchState.services);
+        }
+        patch.complete();
+    }",73-80,0.97202927,0.99154514,0.99154514
+36,,,3,3,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,initProxyClient,(Ljava/util/Map;)V,4,19,21.1%,"private void initProxyClient(Map<String, String> props) {
+        String registryProxyAddress = null;
+        if (props != null) {
+            registryProxyAddress = props.get(REGISTRY_PROXY_PARAM_NAME);
+        }
+
+        if (registryProxyAddress != null
+                && !registryProxyAddress.equals(REGISTRY_PROXY_NULL_VALUE)) {
+            try {
+                URI registryProxyURI = new URI(registryProxyAddress);
+                serviceClientProxy = ServiceClientFactory.createServiceClient(trustManager, null);
+
+                if (serviceClientProxy instanceof NettyHttpServiceClient) {
+                    ((NettyHttpServiceClient) serviceClientProxy).setHttpProxy(registryProxyURI);
+                    logInfo(""Setting registry hosts proxy to: %s"", registryProxyAddress);
+                } else {
+                    logSevere(""Cannot set proxy for accessing registries. Expecting ""
+                            + ""NettyHttpServiceClient, actual: %s"",
+                            serviceClientProxy.getClass().getSimpleName());
+                    serviceClientProxy = null;
+                }
+            } catch (Exception e) {
+                logSevere(""Registry proxy URI invalid syntax: %s. Error: %s"", e.getMessage(),
+                        Utils.toString(e));
+                serviceClientProxy = null;
+            }
+        }
+    }",138-165,0.93083483,0.98251307,0.98251307
+37,,,3,3,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,sendOperationWithClient,(Lcom/vmware/xenon/common/Operation;Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;)V,4,6,66.7%,"private void sendOperationWithClient(Operation op, RequestContext context) {
+        String registryAddress = getRegistryHostAddress(context);
+        if (serviceClientProxy == null ||
+                (registryAddress != null && serviceClientNoProxyList.contains(registryAddress))) {
+            serviceClientNoProxy.send(op);
+        } else {
+            serviceClientProxy.send(op);
+        }
+    }",753-761,0.92313814,0.9737704,0.9737704
+38,,,2,2,0,com.vmware.admiral.service.common.RegistryService,buildDefaultStateInstance,(Lcom/vmware/xenon/common/ServiceHost;)Lcom/vmware/xenon/common/ServiceDocument;,12,14,85.7%,"static ServiceDocument buildDefaultStateInstance(ServiceHost host) {
+        RegistryState state = new RegistryState();
+        state.documentSelfLink = DEFAULT_INSTANCE_LINK;
+        state.address = DEFAULT_REGISTRY_ADDRESS;
+        state.name = DEFAULT_REGISTRY_NAME;
+        state.endpointType = RegistryState.DOCKER_REGISTRY_ENDPOINT_TYPE;
+        state.disabled = Boolean.FALSE;
+        state.customProperties = new HashMap<>();
+        state.customProperties.put(API_VERSION_PROP_NAME, ApiVersion.V1.toString());
+
+        boolean disableDefaultRegistry = Boolean.valueOf(
+                ConfigurationUtil.getProperty(RegistryService.DISABLE_DEFAULT_REGISTRY_PROP_NAME));
+
+        // create or delete default registry
+        if (disableDefaultRegistry) {
+            // ensure default registry does not exist
+            host.registerForServiceAvailability((o, e) -> {
+                host.log(Level.INFO, ""registerForServiceAvailability: %s"",
+                        RegistryFactoryService.SELF_LINK);
+                deleteDefaultRegistry(host);
+            }, true, RegistryFactoryService.SELF_LINK);
+
+            return null;
+        }
+
+        return state;
+    }",72-98,0.9579026,0.99261945,0.99261945
+39,,,2,2,0,com.vmware.admiral.host.HostInitServiceHelper,registerServiceForHelathcheck,(Lcom/vmware/xenon/common/ServiceHost;Ljava/util/Set;)V,10,10,100.0%,"private static void registerServiceForHelathcheck(ServiceHost host, Set<String> services) {
+
+        NodeHealthCheckService nodeHealthCheck = new NodeHealthCheckService();
+        // Add migration task service explicitly because it is started from xenon
+        services.add(MigrationTaskService.FACTORY_LINK);
+        nodeHealthCheck.services = services;
+        nodeHealthCheck.setSelfLink(NodeHealthCheckService.SELF_LINK);
+
+        host.sendRequest(Operation
+                .createPatch(UriUtils.buildUri(host, nodeHealthCheck.getSelfLink()))
+                .setBody(nodeHealthCheck)
+                .setReferer(host.getUri())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        host.log(Level.SEVERE,
+                                ""Exception while register services for healthcheck: %s"", e);
+                    }
+                }));
+    }",122-140,0.9594794,0.9938982,0.9938982
+40,,,2,2,0,com.vmware.admiral.service.common.SslTrustCertificateFactoryService,handlePost,(Lcom/vmware/xenon/common/Operation;)V,10,17,58.8%,"@Override
+    public void handlePost(Operation op) {
+        if (op.isSynchronize()) {
+            op.complete();
+            return;
+        }
+        if (op.hasBody()) {
+            SslTrustCertificateState body = (SslTrustCertificateState) op.getBody(this.stateType);
+            if (body == null) {
+                op.fail(new IllegalArgumentException(""structured body is required""));
+                return;
+            }
+
+            if (body.documentSourceLink != null) {
+                op.fail(new IllegalArgumentException(""clone request not supported""));
+                return;
+            }
+
+            body.documentSelfLink = generateSelfLlink(body);
+            op.setBody(body);
+            op.complete();
+        } else {
+            op.fail(new IllegalArgumentException(""body is required""));
+        }
+    }",40-64,0.922896,0.9792588,0.9792588
+41,,,2,2,0,com.vmware.admiral.service.common.AbstractInitialBootService,countDown,(Ljava/util/concurrent/atomic/AtomicInteger;ZLcom/vmware/xenon/common/Operation;Ljava/lang/Throwable;)V,8,9,88.9%,"private void countDown(AtomicInteger countDown, boolean selfDelete, Operation post,
+            Throwable e) {
+        if (e != null) {
+            post.fail(e);
+        } else if (countDown.decrementAndGet() == 0) {
+            post.complete();
+            logInfo(""Finish initial boot service: %s"", getSelfLink());
+            if (selfDelete) {
+                logInfo(""Stopping initial boot service: %s"", getSelfLink());
+                sendRequest(Operation.createDelete(getUri()));
+            }
+        }
+    }",70-82,0.91988176,0.9728962,0.9728962
+42,,,2,2,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,handleStart,(Lcom/vmware/xenon/common/Operation;)V,6,6,100.0%,"@Override
+    public void handleStart(Operation post) {
+        trustManager = ServerX509TrustManager.create(getHost());
+        serviceClientNoProxyList = new HashSet<>();
+
+        DeferredResult.allOf(Arrays.asList(getProperty(REGISTRY_PROXY_PARAM_NAME),
+                getProperty(REGISTRY_NO_PROXY_LIST_PARAM_NAME)))
+                .whenComplete((p, ex) -> {
+                    if (ex != null) {
+                        logSevere(""Registry proxy properties not provided"", ex);
+                        initProxyClient(null);
+                        initNoProxyClient(null);
+                    } else {
+                        Map<String, String> props = p.stream()
+                                .collect(Collectors.toMap(s -> s.key, s -> s.value));
+                        initProxyClient(props);
+                        initNoProxyClient(props);
+                    }
+                    super.handleStart(post);
+                });
+    }",116-136,0.9618705,0.99499834,0.99499834
+43,,,2,2,0,com.vmware.photon.controller.model.util.StartServicesHelper$ServiceMetadata,initLink,()Ljava/lang/String;,6,9,66.7%,"private String initLink() throws IllegalAccessError {
+
+            String selfLinkOrFactoryLinkName = this.isFactory
+                    ? UriUtils.FIELD_NAME_FACTORY_LINK
+                    : UriUtils.FIELD_NAME_SELF_LINK;
+
+            try {
+                Field selfLinkOrFactoryLink = this.serviceClass
+                        .getDeclaredField(selfLinkOrFactoryLinkName);
+
+                if (selfLinkOrFactoryLink != null) {
+                    selfLinkOrFactoryLink.setAccessible(true);
+
+                    return selfLinkOrFactoryLink.get(null).toString();
+                }
+            } catch (Exception e) {
+            }
+
+            throw new IllegalAccessError(String.format(
+                    ""'%s' service does not have public static '%s' field"",
+                    this.serviceClass,
+                    selfLinkOrFactoryLinkName));
+        }",372-394,0.9044074,0.9675479,0.9675479
+44,,,2,2,0,com.vmware.admiral.common.util.ServerX509TrustManager,start,()V,5,6,83.3%,"public void start() {
+        // check if it's already started
+        if (started.getAndSet(true)) {
+            return;
+        }
+
+        this.documentUpdateTimeMicros = 0;
+        try {
+            verifySubscriptionTargetExists(() -> {
+                try {
+                    subscribeForSslTrustCertNotifications();
+                    loadSslTrustCertServices();
+                } catch (Exception e) {
+                    host.log(Level.SEVERE,
+                            ""Failure while subscribing for ssl certificate notifications: %s"",
+                            Utils.toString(e));
+                }
+            });
+        } finally {
+            schedulePeriodicCertificatesReload();
+        }
+    }",180-201,0.95304006,0.9904433,0.9904433
+45,,,2,2,0,com.vmware.admiral.service.common.ConfigurationService,handleCreate,(Lcom/vmware/xenon/common/Operation;)V,5,6,83.3%,"@Override
+    public void handleCreate(Operation post) {
+        if (!checkForBody(post)) {
+            return;
+        }
+
+        ConfigurationState state = post.getBody(ConfigurationState.class);
+        validate(state);
+
+        post.complete();
+    }",87-97,0.96303785,0.9854965,0.9854965
+46,,,2,2,0,com.vmware.photon.controller.model.security.util.CertificateUtil,getAttributeFromDN,(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;,5,9,55.6%,"public static String getAttributeFromDN(String dn, String attribute) {
+        try {
+            LdapName subjectDn = new LdapName(dn);
+
+            for (Rdn rdn : subjectDn.getRdns()) {
+                if (rdn.getType().equals(attribute)) {
+                    return rdn.getValue().toString();
+                }
+            }
+        } catch (InvalidNameException e) {
+            throw new IllegalArgumentException(e);
+        }
+
+        return null;
+    }",399-413,0.93279463,0.98044175,0.98044175
+47,,,2,2,0,com.vmware.admiral.service.common.ConfigurationService,print,(Ljava/lang/String;Ljava/lang/String;)V,4,4,100.0%,"private static void print(String key, String value) {
+        if (propertiesToPrint.containsKey(key)) {
+            Utils.log(ConfigurationService.class, ConfigurationService.class.getSimpleName(),
+                    Level.INFO, ""%s : %s"", propertiesToPrint.get(key), value);
+        }
+    }",197-202,0.9887128,0.98365974,0.98365974
+48,,,2,2,0,com.vmware.admiral.common.util.QueryUtil,addOption,(Lcom/vmware/xenon/services/common/QueryTask;Lcom/vmware/xenon/services/common/QueryTask$QuerySpecification$QueryOption;)Lcom/vmware/xenon/services/common/QueryTask;,3,4,75.0%,"private static QueryTask addOption(QueryTask queryTask, QueryOption option) {
+        if (queryTask.querySpec.options == null || queryTask.querySpec.options.isEmpty()) {
+            queryTask.querySpec.options = EnumSet.of(option);
+        } else {
+            queryTask.querySpec.options.add(option);
+        }
+        return queryTask;
+    }",230-237,0.7648441,0.866978,0.866978
+49,,,1,1,0,com.vmware.admiral.common.util.SubscriptionManager,start,(Ljava/util/function/Consumer;ZLjava/util/function/Consumer;)V,21,31,67.7%,"public void start(Consumer<SubscriptionNotification<T>> notificationHandler,
+            Consumer<String> callback) {
+        start(notificationHandler, false, callback);
+    }",132-135,0.94272614,0.89502627,0.89502627
+50,,,1,1,0,com.vmware.admiral.service.common.ResourceNamePrefixService,validateStateOnStart,(Lcom/vmware/admiral/service/common/ResourceNamePrefixService$ResourceNamePrefixState;)V,12,23,52.2%,"private static void validateStateOnStart(ResourceNamePrefixState state) {
+        assertNotEmpty(state.prefix, ""prefix"");
+        if (state.prefix.length() > MAX_PREFIX_LENGTH) {
+            throw new LocalizableValidationException(""'prefix' must be less characters than ""
+                    + MAX_PREFIX_LENGTH + 1, ""common.resource-name.characters"", MAX_PREFIX_LENGTH + 1);
+        }
+
+        if (state.numberOfDigits < 0) {
+            throw new LocalizableValidationException(""'numberOfDigits' must be positive."", ""common.resource-name.digits.positive"");
+        } else if (state.numberOfDigits == 0) {
+            state.numberOfDigits = DEFAULT_NUMBER_OF_DIGITS;
+        } else if (state.numberOfDigits > MAX_NUMBER_OF_DIGITS) {
+            throw new LocalizableValidationException(""'numberOfDigits' must be less than: ""
+                    + MAX_NUMBER_OF_DIGITS, ""common.resource-name.digits.range"", MAX_NUMBER_OF_DIGITS);
+        }
+
+        if (state.nextNumber < 0) {
+            throw new LocalizableValidationException(""'nextNumber' must be positive."", ""common.resource-name.next-number.positive"");
+        } else if (state.nextNumber == 0) {
+            state.nextNumber = DEFAULT_NEXT_NUMBER;
+        } else if (state.nextNumber >= state.getMaxNumber()) {
+            throw new LocalizableValidationException(""'nextNumber' must be less than the max number of ""
+                    + state.getMaxNumber(), ""common.resource-name.next-number.max"", state.getMaxNumber());
+        }
+
+        if (state.currentCount == -1) { // initialize the counter only on initial start up.
+            state.currentCount = state.nextNumber;
+        }
+
+        if (state.addRandomToken == null) {
+            state.addRandomToken = ADD_RANDOM_GENERATED_TOKEN;
+        }
+
+    }",150-183,0.84068096,0.93055063,0.93055063
+51,,,1,1,0,com.vmware.admiral.service.common.ResourceNamePrefixService,buildDefaultStateInstance,()Lcom/vmware/xenon/common/ServiceDocument;,11,11,100.0%,"static ServiceDocument buildDefaultStateInstance() {
+        ResourceNamePrefixState state = new ResourceNamePrefixState();
+        state.documentSelfLink = DEFAULT_RESOURCE_NAME_PREFIX_SELF_LINK;
+        state.prefix = DEFAULT_NAME_PREFIX;
+        state.numberOfDigits = ResourceNamePrefixState.DEFAULT_NUMBER_OF_DIGITS;
+        state.addRandomToken = DEFAULT_ADD_RANDOM_TOKEN;
+        SecureRandom r = new SecureRandom();
+        int low = 1;
+        int high = 999;
+        int randomStartNumber = r.nextInt(high - low) + low;
+        state.nextNumber = randomStartNumber;
+
+        return state;
+    }",54-67,0.9547352,0.9922842,0.9922842
+52,,,1,1,0,com.vmware.admiral.common.util.QueryUtil,addTenantGroupAndUserClause,(Ljava/util/Collection;)Lcom/vmware/xenon/services/common/QueryTask$Query;,10,11,90.9%,"public static Query addTenantGroupAndUserClause(String tenantLink) {
+        List<String> listValues = null;
+        if (tenantLink != null && !tenantLink.isEmpty()) {
+            AssertUtil.assertTrue(tenantLink.startsWith(MultiTenantDocument.TENANTS_PREFIX)
+                    || tenantLink.startsWith(MultiTenantDocument.USERS_PREFIX),
+                    String.format(""tenantLink does not have %s or %s prefix."",
+                            MultiTenantDocument.TENANTS_PREFIX,
+                            MultiTenantDocument.USERS_PREFIX));
+            listValues = Collections.singletonList(tenantLink);
+        }
+
+        return addTenantGroupAndUserClause(listValues);
+    }",273-285,0.9544264,0.99321723,0.99321723
+53,,,1,1,0,com.vmware.admiral.service.common.SslTrustCertificateService$SslTrustCertificateState,populateCertificateProperties,(Lcom/vmware/admiral/service/common/SslTrustCertificateService$SslTrustCertificateState;Ljava/security/cert/X509Certificate;)V,10,10,100.0%,"public static void populateCertificateProperties(SslTrustCertificateState state,
+                X509Certificate cert) {
+            state.documentExpirationTimeMicros = TimeUnit.MILLISECONDS
+                    .toMicros(cert.getNotAfter().getTime());
+
+            state.commonName = CertificateUtil.getCommonName(cert.getSubjectDN());
+            state.issuerName = CertificateUtil.getCommonName(cert.getIssuerDN());
+            state.serial = cert.getSerialNumber() == null ? null : cert.getSerialNumber()
+                    .toString();
+            state.fingerprint = CertificateUtil.computeCertificateThumbprint(cert);
+            state.validSince = cert.getNotBefore().getTime();
+            state.validTo = cert.getNotAfter().getTime();
+        }",121-133,0.93043804,0.98377705,0.98377705
+54,,,1,1,0,com.vmware.admiral.service.common.LogService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,9,9,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        ServiceUtils.setRetentionLimit(template);
+
+        /* Workaround until https://www.pivotaltracker.com/n/projects/1471320/stories/143794415
+         * is fixed. Keep minimum versions of this state, because it is going to be kept until
+         * the container is existing. */
+        // com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        template.documentDescription.versionRetentionFloor = 1;
+        template.documentDescription.versionRetentionLimit = 2;
+
+        // resource reference prop:
+        ServiceDocumentDescription.PropertyDescription pd = template.documentDescription
+                .propertyDescriptions.get(LogServiceState.FIELD_NAME_LOGS);
+        pd.indexingOptions = EnumSet.of(PropertyIndexingOption.STORE_ONLY,
+                PropertyIndexingOption.EXCLUDE_FROM_SIGNATURE);
+
+        // logs can be big, need to increase the default size limit
+        template.documentDescription.serializedStateSizeLimit = MAX_LOG_SIZE;
+
+        return template;
+    }",149-171,0.9931017,0.988369,0.988369
+55,,,1,1,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,handlePatch,(Lcom/vmware/xenon/common/Operation;)V,8,10,80.0%,"@Override
+    public void handlePatch(Operation op) {
+        if (!op.hasBody()) {
+            op.fail(new IllegalArgumentException(""body is required""));
+            return;
+        }
+
+        RequestContext context = new RequestContext();
+        context.operation = op;
+
+        context.request = op.getBody(ImageRequest.class);
+        context.request.validate();// validate the request
+        logInfo(""Processing operation request for resource %s"", context.request.resourceReference);
+
+        processRequest(context);
+    }",214-229,0.96653724,0.99286515,0.99286515
+56,,,1,1,0,com.vmware.admiral.host.HostInitServiceHelper,registerServiceForMigration,(Lcom/vmware/xenon/common/ServiceHost;Ljava/util/Set;)V,8,8,100.0%,"private static void registerServiceForMigration(ServiceHost host, Set<String> services) {
+
+        NodeMigrationService nodeMigration = new NodeMigrationService();
+        nodeMigration.services = services;
+
+        host.sendRequest(Operation
+                .createPatch(UriUtils.buildUri(host, NodeMigrationService.SELF_LINK))
+                .setBody(nodeMigration)
+                .setReferer(host.getUri())
+                .setCompletion((o, e) -> {
+                    if (e != null) {
+                        host.log(Level.SEVERE,
+                                ""Exception while register services for migration: %s"", e);
+                    }
+                }));
+    }",142-157,0.95424086,0.9918189,0.9918189
+57,,,1,1,0,com.vmware.admiral.service.common.ResourceNamePrefixService,handleCreate,(Lcom/vmware/xenon/common/Operation;)V,7,10,70.0%,"@Override
+    public void handleCreate(Operation start) {
+        if (!checkForBody(start)) {
+            return;
+        }
+        ResourceNamePrefixState state = start.getBody(ResourceNamePrefixState.class);
+        logFine(""Initial name is %s"", state.prefix);
+        try {
+            validateStateOnStart(state);
+            start.complete();
+        } catch (Throwable e) {
+            start.fail(e);
+        }
+    }",135-148,0.9517786,0.98887026,0.98887026
+58,,,1,1,0,com.vmware.admiral.service.common.SslTrustCertificateService,validateStateOnStart,(Lcom/vmware/admiral/service/common/SslTrustCertificateService$SslTrustCertificateState;)V,7,7,100.0%,"private void validateStateOnStart(SslTrustCertificateState state) throws Exception {
+        assertNotEmpty(state.certificate, ""certificate"");
+        state.certificate = state.certificate.trim();
+
+        X509Certificate[] certificates = CertificateUtil.createCertificateChain(state.certificate);
+
+        CertificateUtil.validateCertificateChain(certificates);
+
+        // Populate the certificate properties based on the first (end server) certificate
+        X509Certificate endCertificate = certificates[0];
+        SslTrustCertificateState.populateCertificateProperties(state, endCertificate);
+
+    }",234-246,0.99274206,0.9865944,0.9865944
+59,,,1,1,0,com.vmware.admiral.host.HostInitCommonServiceConfig,startServices,(Lcom/vmware/xenon/common/ServiceHost;)V,6,7,85.7%,"public static void startServices(ServiceHost host) {
+        host.log(Level.INFO, ""Start initializing common services"");
+
+        startServices(host, servicesToStart);
+
+        if (!CredentialsProxyService.SELF_LINK.equals(AuthCredentialsService.FACTORY_LINK)) {
+            // Proxy in case a prefix is used for calling the services
+            // if running on same URL no need to proxy
+            startServices(host, CredentialsProxyService.class);
+        }
+
+        startServiceFactories(host, serviceFactoriesToStart);
+
+        // trigger common initial boot service and wait to finish, it is responsible for populating
+        // configuration properties states
+        waitCommonInitialBootInitialization(host);
+    }",102-118,0.9931353,0.9906377,0.9906377
+60,,,1,1,0,com.vmware.admiral.common.util.ServerX509TrustManager$SslTrustQueryCompletionHandler,loadCertificate,(Lcom/vmware/admiral/service/common/SslTrustCertificateService$SslTrustCertificateState;)V,5,8,62.5%,"private void loadCertificate(SslTrustCertificateState sslTrustCert) {
+            try {
+                self.putDelegate(sslTrustCert.getAlias(), sslTrustCert.certificate);
+                Utils.log(getClass(), ""Self Signed Trust Store"", Level.FINE,
+                        ""Certificate with alias %s updated"", sslTrustCert.getAlias());
+            } catch (Throwable e) {
+                Utils.logWarning(
+                        ""Exception during certificate reload with alias: %s. Error: %s"",
+                        sslTrustCert.getAlias(), Utils.toString(e));
+            }
+        }",350-360,0.9460684,0.98551303,0.98551303
+61,,,1,1,0,com.vmware.admiral.service.common.UniquePropertiesService,handleCreate,(Lcom/vmware/xenon/common/Operation;)V,5,7,71.4%,"@Override
+    public void handleCreate(Operation post) {
+        if (!checkForBody(post)) {
+            return;
+        }
+
+        UniquePropertiesState state = post.getBody(UniquePropertiesState.class);
+        if (state.uniqueProperties == null) {
+            state.uniqueProperties = new ArrayList<>();
+        }
+        post.setBody(state).complete();
+    }",52-63,0.96127707,0.9886981,0.9886981
+62,,,1,1,0,com.vmware.admiral.adapter.registry.service.ImageRequest,validate,()V,4,5,80.0%,"@Override
+    public void validate() {
+        super.validate();
+        if (operationTypeId != null) {
+            if (ImageOperationType.instanceById(operationTypeId) == null) {
+                throw new IllegalArgumentException(""Not valid operationTypeId: "" + operationTypeId);
+            }
+        }
+    }",21-29,0.97785723,0.99466896,0.99466896
+63,,,1,1,0,com.vmware.admiral.common.util.ServiceDocumentQuery,processQueryResult,(Lcom/vmware/xenon/services/common/QueryTask;Ljava/util/function/Consumer;)V,4,6,66.7%,"private void processQueryResult(QueryTask rsp,
+            Consumer<ServiceDocumentQueryElementResult<T>> handler) {
+        if (!rsp.querySpec.options.contains(QueryOption.TOP_RESULTS) && rsp.querySpec.resultLimit != null
+                && rsp.querySpec.resultLimit != Integer.MAX_VALUE) {
+            // pagination results:
+            getNextPageLinks(rsp.results.nextPageLink, rsp.querySpec.resultLimit,
+                    handler);
+            return;
+        }
+
+        processResults(rsp, handler);
+    }",236-247,0.9473976,0.9888099,0.9888099
+64,,,1,1,0,com.vmware.admiral.host.interceptor.OperationInterceptorRegistry,subscribeToService,(Lcom/vmware/xenon/common/Service;)V,3,9,33.3%,"public void subscribeToService(Service service) {
+        Collection<InterceptorData> interceptors = checkForInterceptor(service);
+        if (interceptors != null) {
+            OperationProcessingChain chain = getServiceOperationProcessingChain(service);
+            for (InterceptorData data : interceptors) {
+                DeferredOperationPredicate filter = new DeferredOperationPredicate(service,
+                        data.action,
+                        data.interceptor);
+                filter.init();
+                chain.getFilters().add(filter);
+            }
+        }
+    }",73-85,0.94142675,0.98610216,0.98610216
+65,,,1,1,0,com.vmware.photon.controller.model.security.util.CertificateUtil,createEmptyKeyStore,()Ljava/security/KeyStore;,3,5,60.0%,"public static KeyStore createEmptyKeyStore() {
+        try {
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            keyStore.load(null); // initialize empty keystore
+            return keyStore;
+
+        } catch (KeyStoreException | NoSuchAlgorithmException
+                | CertificateException | IOException e) {
+            throw new RuntimeException(""Failed to create empty keystore"", e);
+        }
+    }",222-232,0.9727547,0.99517107,0.99517107
+66,,,1,1,0,com.vmware.admiral.adapter.common.ImageOperationType,instanceById,(Ljava/lang/String;)Lcom/vmware/admiral/adapter/common/ImageOperationType;,2,3,66.7%,"public static ImageOperationType instanceById(String id) {
+        if (id == null) {
+            return null;
+        }
+
+        return operationsById.get(id);
+    }",45-51,0.9560194,0.95962816,0.95962816
+67,,,1,1,0,com.vmware.admiral.common.util.AssertUtil,assertNotEmpty,(Ljava/lang/String;Ljava/lang/String;)V,2,3,66.7%,"public static void assertNotEmpty(String value, String propertyName) {
+        if (value == null || value.isEmpty()) {
+            throw new LocalizableValidationException(String.format(PROPERTY_CANNOT_BE_EMPTY_MESSAGE_FORMAT, propertyName),
+                    ""common.assertion.property.not.empty"", propertyName);
+        }
+    }",34-39,0.99679047,0.97715056,0.97715056
+68,,,1,1,0,com.vmware.admiral.common.util.ConfigurationUtil,getProperty,(Ljava/lang/String;)Ljava/lang/String;,2,6,33.3%,"@Deprecated
+    public static String getProperty(String propertyName) {
+        if (configProperties == null || propertyName == null) {
+            return null;
+        }
+        for (ConfigurationState config : configProperties) {
+            if (propertyName.equals(config.key)) {
+                return config.value;
+            }
+        }
+
+        return null;
+    }",68-80,0.9079973,0.9642195,0.9642195
+69,,,1,1,0,com.vmware.admiral.common.util.DelegatingX509TrustManager,putDelegate,(Ljava/lang/Object;Ljavax/net/ssl/X509TrustManager;)V,2,2,100.0%,"public void putDelegate(Object key, X509TrustManager newDelegate) {
+        delegates.put(key, newDelegate);
+    }",77-79,0.99402976,0.95937943,0.95937943
+70,,,1,1,0,com.vmware.admiral.common.util.ServerX509TrustManager,subscribeForSslTrustCertNotifications,()V,2,2,100.0%,"private void subscribeForSslTrustCertNotifications() {
+        this.subscriptionManager.start((n) -> {
+            loadSslTrustCertServices();
+        }, null);
+    }",258-262,0.99879414,0.973431,0.973431
+71,,,1,1,0,com.vmware.admiral.common.util.ServiceDocumentQuery,isCountQuery,(Lcom/vmware/xenon/services/common/QueryTask;)Z,2,2,100.0%,"private boolean isCountQuery(QueryTask q) {
+        return q.querySpec.options != null
+                && q.querySpec.options.contains(QueryOption.COUNT);
+    }",326-329,0.77094275,0.6944074,0.6944074
+72,,,1,1,0,com.vmware.admiral.common.util.ServiceDocumentQuery,isExpandQuery,(Lcom/vmware/xenon/services/common/QueryTask;)Z,2,2,100.0%,"private boolean isExpandQuery(QueryTask q) {
+        return q.querySpec.options != null
+                && q.querySpec.options.contains(QueryOption.EXPAND_CONTENT);
+    }",321-324,0.4327761,0.3599633,0.3599633
+73,,overload of an earlier row - skipped,1,1,0,com.vmware.admiral.common.util.SubscriptionManager,start,(Ljava/util/function/Consumer;Ljava/util/function/Consumer;)V,2,2,100.0%,"public void start(Consumer<SubscriptionNotification<T>> notificationHandler,
+            Consumer<String> callback) {
+        start(notificationHandler, false, callback);
+    }",132-135,0.94272614,0.89502627,0.89502627
+74,,,1,1,0,com.vmware.admiral.common.util.ValidationUtils,validate,(Lcom/vmware/xenon/common/Operation;Lcom/vmware/admiral/common/util/ValidationUtils$ValidateOperationHandler;)Z,2,5,40.0%,"public static boolean validate(Operation op, ValidateOperationHandler validateHandler) {
+        try {
+            validateHandler.validate();
+            return true;
+        } catch (Exception e) {
+            handleValidationException(op, e);
+            return false;
+        }
+    }",51-59,0.91050017,0.9694882,0.9694882
+75,,,1,1,0,com.vmware.admiral.service.common.SslTrustCertificateService,isModified,(Lcom/vmware/xenon/common/Operation;Ljava/lang/String;Ljava/lang/String;)Z,2,3,66.7%,"private boolean isModified(Operation op, String stateCert, String bodyCert) {
+        if (stateCert != null && stateCert.equals(bodyCert)) {
+            return false;
+        }
+        return true;
+    }",248-253,0.9357883,0.9611291,0.9611291
+76,,,1,1,0,com.vmware.admiral.service.common.SslTrustCertificateService$SslTrustCertificateState,getAlias,()Ljava/lang/String;,1,1,100.0%,"public String getAlias() {
+            return Service.getId(this.documentSelfLink);
+        }",117-119,-0.8145223,-0.8338071,-0.8338071
+77,,,1,1,0,com.vmware.photon.controller.model.util.StartServicesHelper$ServiceMetadata,service,(Ljava/lang/Class;)Lcom/vmware/photon/controller/model/util/StartServicesHelper$ServiceMetadata;,1,1,100.0%,"public static ServiceMetadata service(Class<? extends Service> serviceClass) {
+
+            return servicesCache.computeIfAbsent(
+                    serviceClass,
+                    key -> new ServiceMetadata(false /* isFactory */, serviceClass, null));
+        }",206-211,0.99234074,0.9859499,0.9859499
+78,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,computeCertificateThumbprint,(Ljava/security/cert/X509Certificate;Lcom/vmware/photon/controller/model/security/util/CertificateUtil$ThumbprintAlgorithm;)Ljava/lang/String;,12,17,70.6%,"public static String computeCertificateThumbprint(X509Certificate cert) {
+        return computeCertificateThumbprint(cert, ThumbprintAlgorithm.DEFAULT);
+    }",662-664,0.99466234,0.958345,0.958345
+79,,,0,0,0,com.vmware.admiral.common.util.QueryUtil,buildQuery,(Ljava/lang/String;Z[Lcom/vmware/xenon/services/common/QueryTask$Query;)Lcom/vmware/xenon/services/common/QueryTask;,11,11,100.0%,"public static QueryTask buildQuery(Class<? extends ServiceDocument> stateClass,
+            boolean direct, QueryTask.Query... clauses) {
+        String kind = Utils.buildKind(stateClass);
+        return buildQuery(kind, direct, clauses);
+    }",66-70,0.98311037,0.96619487,0.96619487
+80,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,queryUpdatedSince,(JLjava/util/function/Consumer;)V,10,10,100.0%,"public void queryUpdatedSince(long documentSinceUpdateTimeMicros,
+            Consumer<ServiceDocumentQueryElementResult<T>> completionHandler) {
+        AssertUtil.assertNotNull(type, ""type"");
+        AssertUtil.assertNotNull(completionHandler, ""completionHandler"");
+
+        QueryTask q = QueryUtil.buildQuery(type, true);
+        q.querySpec.options = EnumSet.of(QueryOption.EXPAND_CONTENT, QueryOption.INCLUDE_DELETED);
+        q.querySpec.query
+                .addBooleanClause(createUpdatedSinceTimeRange(documentSinceUpdateTimeMicros));
+
+        q.documentExpirationTimeMicros = Utils.fromNowMicrosUtc(DEFAULT_EXPIRATION_TIME_IN_MICROS);
+        q.querySpec.resultLimit = DEFAULT_QUERY_RESULT_LIMIT;
+
+        query(q, completionHandler);
+    }",149-163,0.97520095,0.9951417,0.9951417
+81,,,0,0,0,com.vmware.admiral.host.HostInitServiceHelper,startServiceFactories,(Lcom/vmware/xenon/common/ServiceHost;[Ljava/lang/Class;)V,10,12,83.3%,"@SafeVarargs
+    public static void startServiceFactories(ServiceHost host,
+            Class<? extends Service>... serviceClasses) {
+        Set<String> services = new HashSet<>();
+        for (Class<? extends Service> serviceClass : serviceClasses) {
+            Service serviceInstance;
+            try {
+                serviceInstance = serviceClass.newInstance();
+            } catch (InstantiationException | IllegalAccessException e) {
+                throw new RuntimeException(""Failed to create factory for "" + serviceClass, e);
+            }
+            populateServicesForHealthCheck(host, serviceInstance, serviceClass,
+                    services, true);
+            host.startFactory(serviceInstance);
+            handleEventTopicDeclarators(serviceInstance, host);
+        }
+        registerServiceForHelathcheck(host, services);
+        registerServiceForMigration(host, services);
+    }",34-52,0.93118787,0.9801434,0.9801434
+82,,,0,0,0,com.vmware.admiral.host.HostInitServiceHelper,startServices,(Lcom/vmware/xenon/common/ServiceHost;[Ljava/lang/Class;)V,10,12,83.3%,"@SafeVarargs
+    public static void startServices(ServiceHost host,
+            Class<? extends Service>... serviceClasses) {
+        Set<String> services = new HashSet<>();
+        for (Class<? extends Service> serviceClass : serviceClasses) {
+            Service serviceInstance;
+            try {
+                serviceInstance = serviceClass.newInstance();
+
+            } catch (InstantiationException | IllegalAccessException e) {
+                throw new RuntimeException(""Failed to create instance of "" + serviceClass, e);
+            }
+
+            populateServicesForHealthCheck(host, serviceInstance, serviceClass,
+                    services, false);
+
+            startService(host, serviceClass, serviceInstance);
+            handleEventTopicDeclarators(serviceInstance, host);
+        }
+        registerServiceForHelathcheck(host, services);
+        registerServiceForMigration(host, services);
+    }",54-75,0.9232876,0.9759655,0.9759655
+83,,,0,0,0,com.vmware.admiral.common.util.QueryUtil,buildPropertyQuery,(Ljava/lang/Class;[Ljava/lang/String;)Lcom/vmware/xenon/services/common/QueryTask;,9,9,100.0%,"public static QueryTask buildPropertyQuery(Class<? extends ServiceDocument> stateClass,
+            String... propsAndValues) {
+        QueryTask.Query[] queries = new QueryTask.Query[propsAndValues.length / 2];
+        for (int i = 0; i < propsAndValues.length; i++) {
+            String prop = propsAndValues[i];
+            String value = propsAndValues[++i];
+            QueryTask.Query clause = new QueryTask.Query()
+                    .setTermPropertyName(prop)
+                    .setTermMatchValue(value);
+            queries[(i - 1) / 2] = clause;
+        }
+
+        return buildQuery(stateClass, true, queries);
+    }",91-104,0.8906525,0.95506513,0.95506513
+84,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,createUpdatedSinceTimeRange,(J)Lcom/vmware/xenon/services/common/QueryTask$Query;,9,9,100.0%,"private Query createUpdatedSinceTimeRange(long timeInMicros) {
+        long limitToNowInMicros = Utils.fromNowMicrosUtc(TimeUnit.SECONDS.toMicros(10));
+        NumericRange<Long> range = NumericRange.createLongRange(timeInMicros, limitToNowInMicros,
+                true, false);
+        range.precisionStep = 64; // 4 and 8 doesn't work. 16 works but set 64 to be certain.
+        QueryTask.Query latestSinceCondition = new QueryTask.Query()
+                .setTermPropertyName(ServiceDocument.FIELD_NAME_UPDATE_TIME_MICROS)
+                .setNumericRange(range)
+                .setTermMatchType(MatchType.TERM);
+        latestSinceCondition.occurance = Occurance.MUST_OCCUR;
+        return latestSinceCondition;
+    }",331-342,0.98376846,0.9933874,0.9933874
+85,,,0,0,0,com.vmware.admiral.common.util.ServiceClientFactory,createServiceClient,(Ljavax/net/ssl/SSLContext;I)Lcom/vmware/xenon/common/ServiceClient;,7,10,70.0%,"public static ServiceClient createServiceClient(TrustManager trustManager,
+            KeyManager keyManager) {
+
+        return createServiceClient(CertificateUtil.createSSLContext(
+                trustManager, keyManager));
+    }",40-45,0.9250637,0.9082618,0.9082618
+86,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,setCertificateEntry,(Ljava/security/KeyStore;Ljava/lang/String;Ljava/lang/String;)V,7,9,77.8%,"public static void setCertificateEntry(KeyStore trustStore, String alias, String trustedCert) {
+
+        X509Certificate[] certificates = CertificateUtil.createCertificateChain(trustedCert);
+
+        for (X509Certificate certificate : certificates) {
+            String certAlias = alias + ""_""
+                    + CertificateUtil.getCommonName(certificate.getSubjectDN());
+            try {
+                trustStore.setCertificateEntry(certAlias, certificate);
+            } catch (KeyStoreException e) {
+                throw new RuntimeException(""Failed to set certificate entry"", e);
+            }
+        }
+    }",237-250,0.9412405,0.9812033,0.9812033
+87,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,result,(Ljava/lang/Object;J)Lcom/vmware/admiral/common/util/ServiceDocumentQuery$ServiceDocumentQueryElementResult;,6,8,75.0%,"public ServiceDocumentQueryElementResult<T> result(Object json, long count) {
+        ServiceDocumentQueryElementResult<T> r = new ServiceDocumentQueryElementResult<>();
+        if (type != null) {
+            r.result = Utils.fromJson(json, type);
+            r.documentSelfLink = r.result.documentSelfLink;
+        } else {
+            r.rawResult = json;
+            r.documentSelfLink = Utils.fromJson(json, ServiceDocument.class).documentSelfLink;
+        }
+        r.count = count;
+        return r;
+    }",352-363,0.86360484,0.93751204,0.93751204
+88,,,0,0,0,com.vmware.admiral.service.common.AbstractInitialBootService,initInstances,(Lcom/vmware/xenon/common/Operation;ZZ[Lcom/vmware/xenon/common/ServiceDocument;)V,6,12,50.0%,"protected void initInstances(Operation post, ServiceDocument... states) {
+        initInstances(post, true, true, states);
+    }",40-42,0.98595566,0.93516195,0.93516195
+89,,,0,0,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,handleRequest,(Lcom/vmware/xenon/common/Operation;)V,5,5,100.0%,"@Override
+    public void handleRequest(Operation op) {
+        if (op.getAction() != Action.PATCH) {
+            Operation.failActionNotSupported(op);
+            return;
+        }
+
+        handlePatch(op);
+    }",204-212,0.9712766,0.9892131,0.9892131
+90,,,0,0,0,com.vmware.admiral.service.common.AbstractSecuredFactoryService,handleRequest,(Lcom/vmware/xenon/common/Operation;)V,5,7,71.4%,"@Override
+    public void handleRequest(Operation op) {
+        if (op.getAction() == Action.DELETE &&
+                op.getUri().getQuery() == null &&
+                !op.getAuthorizationContext().isSystemUser()) {
+            op.fail(Operation.STATUS_CODE_FORBIDDEN);
+            return;
+        }
+
+        super.handleRequest(op);
+    }",28-38,0.96622217,0.98831,0.98831
+91,,,0,0,0,com.vmware.admiral.service.common.MultiTenantDocument,copyTo,(Lcom/vmware/xenon/common/ServiceDocument;)V,5,5,100.0%,"@Override
+    public void copyTo(ServiceDocument target) {
+        super.copyTo(target);
+        if (target instanceof MultiTenantDocument) {
+            MultiTenantDocument mtd = (MultiTenantDocument)target;
+            mtd.tenantLinks = this.tenantLinks;
+        }
+    }",33-40,0.972784,0.99472344,0.99472344
+92,,,0,0,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,processRequest,(Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;)V,4,10,40.0%,"private void processRequest(RequestContext context) {
+
+        switch (context.request.getOperationType()) {
+        case SEARCH:
+            fetchRegistry(context, () -> processSearchRequest(context));
+            break;
+
+        case PING:
+            fetchAuthCredentials(context, () -> processPingRequest(context));
+            break;
+
+        case LIST_TAGS:
+            fetchRegistry(context, () -> processListImageTagsRequest(context));
+            break;
+
+        default:
+            context.operation.fail(new IllegalArgumentException(
+                    ""Unexpected request type: "" + context.request.getOperationType()));
+            break;
+        }
+
+    }",231-252,0.91584724,0.9750718,0.9750718
+93,,,0,0,0,com.vmware.admiral.common.util.ServerX509TrustManager,loadSslTrustCertServices,()V,4,4,100.0%,"private void loadSslTrustCertServices() {
+        // make sure first get the time, then issue the query not to miss an interval with updates
+        long currentDocumentUpdateTimeMicros = Utils.getNowMicrosUtc();
+        sslTrustQuery.queryUpdatedSince(documentUpdateTimeMicros, queryHandler);
+        this.documentUpdateTimeMicros = currentDocumentUpdateTimeMicros;
+    }",251-256,0.997534,0.96907264,0.96907264
+94,,,0,0,0,com.vmware.admiral.common.util.ServerX509TrustManager,putDelegate,(Ljava/lang/String;Ljava/lang/String;)V,4,4,100.0%,"public void putDelegate(String alias, String certificate) {
+        X509TrustManager delegateTrustManager = (X509TrustManager) CertificateUtil
+                .getTrustManagers(alias, certificate)[0];
+
+        this.delegatingTrustManager.putDelegate(alias, delegateTrustManager);
+    }",312-317,0.8681693,0.83865774,0.83865774
+95,,,0,0,0,com.vmware.admiral.service.common.CommonInitialBootService,buildUniqueProjectIndexesInstance,()Lcom/vmware/admiral/service/common/UniquePropertiesService$UniquePropertiesState;,4,4,100.0%,"public static UniquePropertiesState buildUniqueProjectIndexesInstance() {
+        UniquePropertiesState state = new UniquePropertiesState();
+        state.uniqueProperties = new ArrayList<>();
+        state.documentSelfLink = UriUtils.buildUriPath(UniquePropertiesService.FACTORY_LINK,
+                UniquePropertiesService.PROJECT_INDEXES_ID);
+        return state;
+    }",60-66,0.9922706,0.99116546,0.99116546
+96,,,0,0,0,com.vmware.admiral.service.common.CommonInitialBootService,buildUniqueProjectNamesInstance,()Lcom/vmware/admiral/service/common/UniquePropertiesService$UniquePropertiesState;,4,4,100.0%,"public static UniquePropertiesState buildUniqueProjectNamesInstance() {
+        UniquePropertiesState state = new UniquePropertiesState();
+        state.uniqueProperties = new ArrayList<>();
+        state.documentSelfLink = UriUtils.buildUriPath(UniquePropertiesService.FACTORY_LINK,
+                UniquePropertiesService.PROJECT_NAMES_ID);
+        return state;
+    }",52-58,0.99185294,0.9916244,0.9916244
+97,,,0,0,0,com.vmware.admiral.service.common.NodeHealthCheckService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,4,4,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument d = super.getDocumentTemplate();
+        addServiceRequestRoute(d, Action.GET,
+                ""Do health check of services in default node group if they are available and ""
+                        + ""ready for replication."", null);
+        addServiceRequestRoute(d, Action.PATCH,
+                ""Register services for health check."", NodeHealthCheckService.class);
+        return d;
+    }",113-122,0.98598576,0.99370193,0.99370193
+98,,,0,0,0,com.vmware.admiral.service.common.NodeMigrationService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,4,4,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument d = super.getDocumentTemplate();
+        addServiceRequestRoute(d, Action.GET,
+                ""Do migration of documents from another xenon node."", MigrationRequest.class);
+        addServiceRequestRoute(d, Action.PATCH,
+                ""Add services for migration from another xenon node."", NodeMigrationService.class);
+        return d;
+    }",235-243,0.9889026,0.99251324,0.99251324
+99,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,getTrustManagers,(Ljava/lang/String;Ljava/lang/String;)[Ljavax/net/ssl/TrustManager;,4,5,80.0%,"public static TrustManager[] getTrustManagers(String alias,
+            String trustedCert) {
+        if (trustedCert == null) {
+            return null;
+        }
+
+        KeyStore trustStore = createEmptyKeyStore();
+
+        setCertificateEntry(trustStore, alias, trustedCert);
+
+        return getTrustManagers(trustStore);
+    }",272-283,0.91411,0.9612699,0.9612699
+100,,,0,0,0,com.vmware.admiral.adapter.common.service.mock.MockTaskService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",50-55,0.9948382,0.9864599,0.9864599
+101,,,0,0,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,getProperty,(Ljava/lang/String;)Lcom/vmware/xenon/common/DeferredResult;,3,3,100.0%,"private DeferredResult<ConfigurationState> getProperty(String propName) {
+        String propLink = UriUtils.buildUriPath(ConfigurationFactoryService.SELF_LINK, propName);
+        Operation op = Operation.createGet(this, propLink);
+        return this.sendWithDeferredResult(op, ConfigurationState.class);
+    }",784-788,0.993405,0.9556917,0.9556917
+102,,,0,0,0,com.vmware.admiral.common.util.AssertUtil,assertNotNullOrEmpty,(Ljava/lang/String;Ljava/lang/String;)V,3,3,100.0%,"public static void assertNotNullOrEmpty(String value, String propertyName) {
+        assertNotNull(value, propertyName);
+        assertNotEmpty(value, propertyName);
+    }",41-44,0.2787464,0.26350722,0.26350722
+103,,,0,0,0,com.vmware.admiral.log.EventLogService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",172-177,0.9948382,0.9864599,0.9864599
+104,,,0,0,0,com.vmware.admiral.service.common.ConfigurationService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",117-122,0.9948382,0.9864599,0.9864599
+105,,,0,0,0,com.vmware.admiral.service.common.ConfigurationService,validate,(Lcom/vmware/admiral/service/common/ConfigurationService$ConfigurationState;)V,3,3,100.0%,"private void validate(ConfigurationState state) {
+        assertNotEmpty(state.key, ""key"");
+        assertNotEmpty(state.value, ""value"");
+    }",112-115,0.970954,0.95214134,0.95214134
+106,,,0,0,0,com.vmware.admiral.service.common.CounterSubTaskService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",197-202,0.9948382,0.9864599,0.9864599
+107,,,0,0,0,com.vmware.admiral.service.common.EventTopicService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",89-94,0.9948382,0.9864599,0.9864599
+108,,,0,0,0,com.vmware.admiral.service.common.ExtensibilitySubscriptionCallbackService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",147-152,0.9948382,0.9864599,0.9864599
+109,,,0,0,0,com.vmware.admiral.service.common.ExtensibilitySubscriptionService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",72-77,0.9948382,0.9864599,0.9864599
+110,,,0,0,0,com.vmware.admiral.service.common.LogService,getMaxLogSize,()I,3,4,75.0%,"private static int getMaxLogSize() {
+        Integer maxSize = Integer.getInteger(CONTAINER_LOG_MAX_SIZE_PROPERTY,
+                DEFAULT_MAX_LOG_SIZE_VALUE);
+        if (maxSize < MIN_LOG_SIZE) {
+            maxSize = MIN_LOG_SIZE;
+        }
+        return maxSize;
+    }",177-184,0.9480395,0.9802617,0.9802617
+111,,,0,0,0,com.vmware.admiral.service.common.RegistryService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",291-296,0.9948382,0.9864599,0.9864599
+112,,,0,0,0,com.vmware.admiral.service.common.ResourceNamePrefixService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",230-235,0.9948382,0.9864599,0.9864599
+113,,,0,0,0,com.vmware.admiral.service.common.SslTrustCertificateFactoryService,generateFingerprint,(Lcom/vmware/admiral/service/common/SslTrustCertificateService$SslTrustCertificateState;)Ljava/lang/String;,3,3,100.0%,"public static String generateFingerprint(SslTrustCertificateState body) {
+        AssertUtil.assertNotEmpty(body.certificate, ""certificate"");
+        return CertificateUtil
+                .generatePureFingerPrint(CertificateUtil.createCertificateChain(body.certificate));
+    }",66-70,0.976874,0.9399749,0.9399749
+114,,,0,0,0,com.vmware.admiral.service.common.SslTrustCertificateService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument template = super.getDocumentTemplate();
+        com.vmware.photon.controller.model.ServiceUtils.setRetentionLimit(template);
+        return template;
+    }",227-232,0.9948382,0.9864599,0.9864599
+115,,,0,0,0,com.vmware.admiral.service.common.SslTrustImportService,getDocumentTemplate,()Lcom/vmware/xenon/common/ServiceDocument;,3,3,100.0%,"@Override
+    public ServiceDocument getDocumentTemplate() {
+        ServiceDocument d = super.getDocumentTemplate();
+        addServiceRequestRoute(d, Action.PUT,
+                ""Import certificate from an URI. When the certificate is downloaded and ""
+                        + ""validated successfully the response is empty with status code 204. If ""
+                        + ""the certificate is not validated, the response body contains the ""
+                        + ""certificate with status code 200."",
+                SslTrustCertificateState.class);
+        return d;
+    }",202-212,0.9763151,0.9952316,0.9952316
+116,,,0,0,0,com.vmware.photon.controller.model.ServiceUtils,setRetentionLimit,(Lcom/vmware/xenon/common/ServiceDocument;)V,3,3,100.0%,"public static void setRetentionLimit(ServiceDocument template) {
+        template.documentDescription.versionRetentionLimit = SERVICE_DOCUMENT_VERSION_RETENTION_LIMIT;
+        template.documentDescription.versionRetentionFloor = SERVICE_DOCUMENT_VERSION_RETENTION_FLOOR;
+    }",26-29,0.96763796,0.9906989,0.9906989
+117,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,createSSLContext,(Ljavax/net/ssl/TrustManager;Ljavax/net/ssl/KeyManager;)Ljavax/net/ssl/SSLContext;,3,5,60.0%,"public static SSLContext createSSLContext(String trustedCert,
+            String clientKey, String clientCert) {
+
+        try {
+            SSLContext ctx = SSLContext.getInstance(""TLS"");
+            ctx.init(
+                    CertificateUtil.getKeyManagers(""client"", clientKey, clientCert),
+                    CertificateUtil.getTrustManagers(""server"", trustedCert), null);
+
+            return ctx;
+
+        } catch (NoSuchAlgorithmException | KeyManagementException e) {
+            throw new RuntimeException(""Failed to create SSLContext"", e);
+        }
+    }",339-353,0.96255577,0.9942521,0.9942521
+118,,overload of an earlier row - skipped,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,getTrustManagers,(Ljava/security/KeyStore;)[Ljavax/net/ssl/TrustManager;,3,5,60.0%,"public static TrustManager[] getTrustManagers(String alias,
+            String trustedCert) {
+        if (trustedCert == null) {
+            return null;
+        }
+
+        KeyStore trustStore = createEmptyKeyStore();
+
+        setCertificateEntry(trustStore, alias, trustedCert);
+
+        return getTrustManagers(trustStore);
+    }",272-283,0.91411,0.9612699,0.9612699
+119,,,0,0,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,getRegistryHostAddress,(Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;)Ljava/lang/String;,2,8,25.0%,"private String getRegistryHostAddress(RequestContext c) {
+        if (c != null && c.registryState != null && c.registryState.address != null) {
+            String registry = c.registryState.address;
+            try {
+                URI registryUri = new URI(registry);
+                return registryUri.getHost();
+            } catch (Exception e) {
+                logWarning(""Problem while getting the host from registry address %s. Error: %s"",
+                        registry, e.getMessage());
+            }
+        }
+        return null;
+    }",763-775,0.9426253,0.98644364,0.98644364
+120,,,0,0,0,com.vmware.admiral.adapter.registry.service.RegistryAdapterService,processPingRequest,(Lcom/vmware/admiral/adapter/registry/service/RegistryAdapterService$RequestContext;)V,2,2,100.0%,"private void processPingRequest(RequestContext context) {
+        doPing(ApiVersion.V1, V1_PING_ENDPOINT, context, (t1) -> {
+            doPing(ApiVersion.V2, V2_PING_ENDPOINT, context, (t2) -> {
+                String error = String.format(""Ping attempts failed with errors: %s -- %s"",
+                        t1.getMessage(), t2.getMessage());
+                context.operation.fail(new Exception(error));
+            });
+        });
+    }",493-501,0.97729945,0.9952629,0.9952629
+121,,,0,0,0,com.vmware.admiral.common.DeploymentProfileConfig,setTest,(Z)V,2,2,100.0%,"public void setTest(boolean test) {
+        this.test = test;
+    }",33-35,0.95895636,0.89107454,0.89107454
+122,,,0,0,0,com.vmware.admiral.common.util.AssertUtil,assertNotNull,(Ljava/lang/Object;Ljava/lang/String;)V,2,3,66.7%,"public static void assertNotNull(Object value, String propertyName) {
+        if (value == null) {
+            throw new LocalizableValidationException(String.format(PROPERTY_CANNOT_BE_NULL_MESSAGE_FORMAT, propertyName),
+                    ""common.assertion.property.required"", propertyName);
+        }
+    }",27-32,0.99770314,0.9761018,0.9761018
+123,,,0,0,0,com.vmware.admiral.common.util.OperationUtil,createForcedPost,(Ljava/net/URI;)Lcom/vmware/xenon/common/Operation;,2,2,100.0%,"public static Operation createForcedPost(URI uri) {
+        return Operation.createPost(uri)
+                .addPragmaDirective(Operation.PRAGMA_DIRECTIVE_FORCE_INDEX_UPDATE);
+    }",43-46,0.9816112,0.9266561,0.9266561
+124,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.common.util.QueryUtil,buildQuery,(Ljava/lang/Class;Z[Lcom/vmware/xenon/services/common/QueryTask$Query;)Lcom/vmware/xenon/services/common/QueryTask;,2,2,100.0%,"public static QueryTask buildQuery(Class<? extends ServiceDocument> stateClass,
+            boolean direct, QueryTask.Query... clauses) {
+        String kind = Utils.buildKind(stateClass);
+        return buildQuery(kind, direct, clauses);
+    }",66-70,0.98311037,0.96619487,0.96619487
+125,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,queryDocument,(Ljava/lang/String;Ljava/util/function/Consumer;)V,2,2,100.0%,"public void queryDocument(String documentSelfLink,
+            Consumer<ServiceDocumentQueryElementResult<T>> completionHandler) {
+        queryUpdatedDocumentSince(-1, documentSelfLink, completionHandler);
+    }",73-76,0.94942045,0.90859157,0.90859157
+126,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.service.common.AbstractInitialBootService,initInstances,(Lcom/vmware/xenon/common/Operation;[Lcom/vmware/xenon/common/ServiceDocument;)V,2,2,100.0%,"protected void initInstances(Operation post, ServiceDocument... states) {
+        initInstances(post, true, true, states);
+    }",40-42,0.98595566,0.93516195,0.93516195
+127,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,generatePureFingerPrint,(Ljava/security/cert/X509Certificate;)Ljava/lang/String;,2,2,100.0%,"public static String generatePureFingerPrint(X509Certificate[] certificateChain) {
+        return generatePureFingerPrint(certificateChain[0]);
+    }",781-783,0.99002326,0.95592767,0.95592767
+128,,,0,0,0,com.vmware.photon.controller.model.util.AssertUtil,assertNotNull,(Ljava/lang/Object;Ljava/lang/String;)V,2,3,66.7%,"public static void assertNotNull(Object obj, String errorMessage) {
+        if (obj == null) {
+            throw new IllegalArgumentException(errorMessage);
+        }
+    }",31-35,0.9897782,0.97739804,0.97739804
+129,,,0,0,0,com.vmware.admiral.adapter.common.service.mock.MockTaskFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+    public Service createServiceInstance() throws Throwable {
+        return new MockTaskService();
+    }",27-30,0.9899135,0.94033396,0.94033396
+130,,,0,0,0,com.vmware.admiral.adapter.registry.service.ImageRequest,getOperationType,()Lcom/vmware/admiral/adapter/common/ImageOperationType;,1,1,100.0%,"public ImageOperationType getOperationType() {
+        return ImageOperationType.instanceById(operationTypeId);
+    }",31-33,0.9381252,0.85725814,0.85725814
+131,,,0,0,0,com.vmware.admiral.common.DeploymentProfileConfig,getInstance,()Lcom/vmware/admiral/common/DeploymentProfileConfig;,1,1,100.0%,"public static DeploymentProfileConfig getInstance() {
+        return INSTANCE;
+    }",25-27,0.9596847,0.89408916,0.89408916
+132,,,0,0,0,com.vmware.admiral.common.util.QueryUtil,addExpandOption,(Lcom/vmware/xenon/services/common/QueryTask;)Lcom/vmware/xenon/services/common/QueryTask;,1,1,100.0%,"public static QueryTask addExpandOption(QueryTask queryTask) {
+        return addOption(queryTask, QueryOption.EXPAND_CONTENT);
+    }",218-220,0.991178,0.9488353,0.9488353
+133,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.common.util.ServiceClientFactory,createServiceClient,(Ljavax/net/ssl/SSLContext;)Lcom/vmware/xenon/common/ServiceClient;,1,1,100.0%,"public static ServiceClient createServiceClient(TrustManager trustManager,
+            KeyManager keyManager) {
+
+        return createServiceClient(CertificateUtil.createSSLContext(
+                trustManager, keyManager));
+    }",40-45,0.9250637,0.9082618,0.9082618
+134,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.common.util.ServiceClientFactory,createServiceClient,(Ljavax/net/ssl/TrustManager;Ljavax/net/ssl/KeyManager;)Lcom/vmware/xenon/common/ServiceClient;,1,1,100.0%,"public static ServiceClient createServiceClient(TrustManager trustManager,
+            KeyManager keyManager) {
+
+        return createServiceClient(CertificateUtil.createSSLContext(
+                trustManager, keyManager));
+    }",40-45,0.9250637,0.9082618,0.9082618
+135,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,getDefaultQueryExpiration,()J,1,1,100.0%,"public static long getDefaultQueryExpiration() {
+        return Utils.fromNowMicrosUtc(DEFAULT_EXPIRATION_TIME_IN_MICROS);
+    }",56-58,0.98305887,0.93201435,0.93201435
+136,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery,noResult,()Lcom/vmware/admiral/common/util/ServiceDocumentQuery$ServiceDocumentQueryElementResult;,1,1,100.0%,"public static <S extends ServiceDocument> ServiceDocumentQueryElementResult<S> noResult() {
+        return new ServiceDocumentQueryElementResult<>();
+    }",391-393,0.9815716,0.92760545,0.92760545
+137,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery$ServiceDocumentQueryElementResult,getResult,()Lcom/vmware/xenon/common/ServiceDocument;,1,1,100.0%,"public T getResult() {
+            return result;
+        }",414-416,-0.80855185,-0.83997816,-0.83997816
+138,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery$ServiceDocumentQueryElementResult,hasException,()Z,1,1,100.0%,"public boolean hasException() {
+            return exception != null;
+        }",402-404,-0.8522301,-0.87341714,-0.87341714
+139,,,0,0,0,com.vmware.admiral.common.util.ServiceDocumentQuery$ServiceDocumentQueryElementResult,hasResult,()Z,1,1,100.0%,"public boolean hasResult() {
+            return result != null || rawResult != null || documentSelfLink != null || count > 0;
+        }",406-408,-0.5127714,-0.58365846,-0.58365846
+140,,,0,0,0,com.vmware.admiral.host.HostInitServiceHelper,handleEventTopicDeclarators,(Lcom/vmware/xenon/common/Service;Lcom/vmware/xenon/common/ServiceHost;)V,1,1,100.0%,"private static void handleEventTopicDeclarators(Service service, ServiceHost host) {
+        /*
+        // as a result of 1959241 disabling extensibility, to be removed further
+
+        if (service instanceof EventTopicDeclarator) {
+            ((EventTopicDeclarator) service).registerEventTopics(host);
+        }
+        */
+    }",159-167,0.9913833,0.97440857,0.97440857
+141,,,0,0,0,com.vmware.admiral.log.EventLogFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+    public Service createServiceInstance() throws Throwable {
+        return new EventLogService();
+    }",52-55,0.9897587,0.9394944,0.9394944
+142,,,0,0,0,com.vmware.admiral.service.common.ConfigurationService$ConfigurationFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+        public Service createServiceInstance() {
+            return new ConfigurationService();
+        }",74-77,0.9949382,0.97791106,0.97791106
+143,,,0,0,0,com.vmware.admiral.service.common.ExtensibilitySubscriptionFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+    public Service createServiceInstance() throws Throwable {
+        return new ExtensibilitySubscriptionService();
+    }",28-31,0.9904813,0.9406331,0.9406331
+144,,,0,0,0,com.vmware.admiral.service.common.RegistryFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+    public Service createServiceInstance() throws Throwable {
+        return new RegistryService();
+    }",40-43,0.9905418,0.94272935,0.94272935
+145,,,0,0,0,com.vmware.admiral.service.common.ResourceNamePrefixService$ResourceNamePrefixState,getMaxNumber,()J,1,1,100.0%,"public long getMaxNumber() {
+            return ((long) Math.pow(10, numberOfDigits)) - 1;
+        }",108-110,0.8509641,0.74945164,0.74945164
+146,,,0,0,0,com.vmware.admiral.service.common.ServiceTaskCallback,create,(Ljava/lang/String;)Lcom/vmware/admiral/service/common/ServiceTaskCallback;,1,1,100.0%,"public static ServiceTaskCallback create(String serviceSelfLink,
+            TaskStage taskStageComplete,
+            Enum<?> subStageComplete, TaskStage taskStageFailed, Enum<?> subStageFailed) {
+        return new ServiceTaskCallback(serviceSelfLink, taskStageComplete, subStageComplete,
+                taskStageFailed, subStageFailed);
+    }",43-48,0.97063106,0.99407357,0.99407357
+147,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.service.common.ServiceTaskCallback,create,(Ljava/lang/String;Lcom/vmware/xenon/common/TaskState$TaskStage;Ljava/lang/Enum;Lcom/vmware/xenon/common/TaskState$TaskStage;Ljava/lang/Enum;)Lcom/vmware/admiral/service/common/ServiceTaskCallback;,1,1,100.0%,"public static ServiceTaskCallback create(String serviceSelfLink,
+            TaskStage taskStageComplete,
+            Enum<?> subStageComplete, TaskStage taskStageFailed, Enum<?> subStageFailed) {
+        return new ServiceTaskCallback(serviceSelfLink, taskStageComplete, subStageComplete,
+                taskStageFailed, subStageFailed);
+    }",43-48,0.97063106,0.99407357,0.99407357
+148,,overload of an earlier row - skipped,0,0,0,com.vmware.admiral.service.common.ServiceTaskCallback,create,(Ljava/lang/String;Ljava/lang/Enum;Ljava/lang/Enum;)Lcom/vmware/admiral/service/common/ServiceTaskCallback;,1,1,100.0%,"public static ServiceTaskCallback create(String serviceSelfLink,
+            TaskStage taskStageComplete,
+            Enum<?> subStageComplete, TaskStage taskStageFailed, Enum<?> subStageFailed) {
+        return new ServiceTaskCallback(serviceSelfLink, taskStageComplete, subStageComplete,
+                taskStageFailed, subStageFailed);
+    }",43-48,0.97063106,0.99407357,0.99407357
+149,,,0,0,0,com.vmware.admiral.service.common.SslTrustCertificateFactoryService,createServiceInstance,()Lcom/vmware/xenon/common/Service;,1,1,100.0%,"@Override
+    public Service createServiceInstance() throws Throwable {
+        return new SslTrustCertificateService();
+    }",29-32,0.990506,0.9407697,0.9407697
+150,,,0,0,0,com.vmware.admiral.service.common.SslTrustCertificateFactoryService,generateSelfLlink,(Lcom/vmware/admiral/service/common/SslTrustCertificateService$SslTrustCertificateState;)Ljava/lang/String;,1,1,100.0%,"public static String generateSelfLlink(SslTrustCertificateState body) {
+        return UriUtils.buildUriPath(SELF_LINK, generateFingerprint(body));
+    }",72-74,0.9873433,0.936748,0.936748
+151,,overload of an earlier row - skipped,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,computeCertificateThumbprint,(Ljava/security/cert/X509Certificate;)Ljava/lang/String;,1,1,100.0%,"public static String computeCertificateThumbprint(X509Certificate cert) {
+        return computeCertificateThumbprint(cert, ThumbprintAlgorithm.DEFAULT);
+    }",662-664,0.99466234,0.958345,0.958345
+152,,overload of an earlier row - skipped,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil,generatePureFingerPrint,([Ljava/security/cert/X509Certificate;)Ljava/lang/String;,1,1,100.0%,"public static String generatePureFingerPrint(X509Certificate[] certificateChain) {
+        return generatePureFingerPrint(certificateChain[0]);
+    }",781-783,0.99002326,0.95592767,0.95592767
+153,,,0,0,0,com.vmware.photon.controller.model.security.util.CertificateUtil$ThumbprintAlgorithm,getAlgorithmName,()Ljava/lang/String;,1,1,100.0%,"public String getAlgorithmName() {
+            return this.algorithmName;
+        }",922-924,-0.89711964,-0.89454144,-0.89454144
+154,,,0,0,0,com.vmware.photon.controller.model.util.StartServicesHelper$ServiceMetadata,factoryService,(Ljava/lang/Class;)Lcom/vmware/photon/controller/model/util/StartServicesHelper$ServiceMetadata;,1,1,100.0%,"public static ServiceMetadata factoryService(Class<? extends Service> serviceClass) {
+
+            return factoryService(serviceClass, null /* factoryCreator */);
+        }",231-234,0.23073657,0.09545632,0.09545632
+155,,overload of an earlier row - skipped,0,0,0,com.vmware.photon.controller.model.util.StartServicesHelper$ServiceMetadata,factoryService,(Ljava/lang/Class;Ljava/util/function/Supplier;)Lcom/vmware/photon/controller/model/util/StartServicesHelper$ServiceMetadata;,1,1,100.0%,"public static ServiceMetadata factoryService(Class<? extends Service> serviceClass) {
+
+            return factoryService(serviceClass, null /* factoryCreator */);
+        }",231-234,0.23073657,0.09545632,0.09545632
